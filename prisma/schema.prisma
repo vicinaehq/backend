@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+	Linux
+	MacOS
+	Windows
+}
+
+// always latest version
+model Extension {
+	id String @id @default(nanoid())
+	name String
+	description String
+	downloadCount Int @default(0)
+	// @vicinae/api dependency version
+	apiVersion String
+	categories ExtensionCategory[]
+	createdAt DateTime @default(now())
+	updatedAt DateTime @updatedAt
+	author User? @relation(fields: [authorId], references: [id])
+	authorId String
+	killListedAt DateTime? // to quickly blacklist an extension if for some reason we need to
+	platforms ExtensionPlatform[]
+}
+
+model ExtensionPlatform {
+	id Platform @id
+	extensions Extension[]
+}
+
+model ExtensionCategory {
+	id String @id 
+	name String
+	extensions Extension[]
+}
+
+model GitHubUser {
+	id String @id
+	user User?
+}
+
+model User {
+	id String @id @default(nanoid())
+	github GitHubUser? @relation(fields: [githubId], references: [id])
+	githubId String @unique
+	extensions Extension[] 
+}
