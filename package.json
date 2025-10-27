@@ -2,7 +2,7 @@
   "name": "store",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
-    "postinstall": "prisma generate"
+    "vercel-build": "prisma generate && prisma migrate deploy && tsc"
   },
   "dependencies": {
     "@prisma/client": "^6.18.0",
@@ -14,7 +14,8 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "prisma": "^6.18.0"
+    "prisma": "^6.18.0",
+    "typescript": "^5.9.3"
   },
   "type": "module"
 }
