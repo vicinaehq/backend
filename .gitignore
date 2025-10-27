@@ -7,8 +7,7 @@ node_modules/
 # Environment
 .env
 
-# Local storage
-storage/
+/storage
 
 # Database
 *.db
