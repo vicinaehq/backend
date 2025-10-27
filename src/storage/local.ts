@@ -1,7 +1,7 @@
 import { mkdir, writeFile, readFile, unlink, access } from "fs/promises";
 import { dirname, join } from "path";
-import type { StorageAdapter, StorageMetadata } from "./interface";
-import { StorageError } from "./interface";
+import type { StorageAdapter, StorageMetadata } from "./interface.js";
+import { StorageError } from "./interface.js";
 
 export interface LocalStorageConfig {
   basePath: string;

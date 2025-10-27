@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import { createStorageFromEnv } from './storage'
-import type { StorageAdapter } from './storage'
-import { LocalStorageAdapter } from './storage'
-import extensionsRouter from './routes/extensions'
+import { createStorageFromEnv } from './storage/index.js'
+import type { StorageAdapter } from './storage/index.js'
+import { LocalStorageAdapter } from './storage/index.js'
+import extensionsRouter from './routes/extensions.js'
 
 const storage = createStorageFromEnv()
 

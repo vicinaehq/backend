@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import type { StorageAdapter } from '../storage';
-import manifestSchema from '../schemas/manifest';
+import type { StorageAdapter } from '../storage/index.js';
+import manifestSchema from '../schemas/manifest.js';
 import { z } from 'zod';
 import * as JSZip from 'jszip';
-import { prisma } from '../db';
+import { prisma } from '../db.js';
 
 type AppContext = {
   Variables: {

@@ -1,6 +1,6 @@
-import type { StorageAdapter } from "./interface";
-import { LocalStorageAdapter, type LocalStorageConfig } from "./local";
-import { VercelBlobStorageAdapter, type VercelBlobStorageConfig } from "./vercel-blob";
+import type { StorageAdapter } from "./interface.js";
+import { LocalStorageAdapter, type LocalStorageConfig } from "./local.js";
+import { VercelBlobStorageAdapter, type VercelBlobStorageConfig } from "./vercel-blob.js";
 
 export type StorageProvider = "local" | "vercel-blob";
 
@@ -57,9 +57,9 @@ export function createStorageFromEnv(): StorageAdapter {
   return createStorage(config);
 }
 
-export type { StorageAdapter, StorageMetadata } from "./interface";
-export { StorageError } from "./interface";
-export type { LocalStorageConfig } from "./local";
-export { LocalStorageAdapter } from "./local";
-export type { VercelBlobStorageConfig } from "./vercel-blob";
-export { VercelBlobStorageAdapter } from "./vercel-blob";
+export type { StorageAdapter, StorageMetadata } from "./interface.js";
+export { StorageError } from "./interface.js";
+export type { LocalStorageConfig } from "./local.js";
+export { LocalStorageAdapter } from "./local.js";
+export type { VercelBlobStorageConfig } from "./vercel-blob.js";
+export { VercelBlobStorageAdapter } from "./vercel-blob.js";
