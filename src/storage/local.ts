@@ -4,23 +4,10 @@ import type { StorageAdapter, StorageMetadata } from "./interface";
 import { StorageError } from "./interface";
 
 export interface LocalStorageConfig {
-  /**
-   * Base directory where files will be stored
-   * @example "/var/data/extensions"
-   */
   basePath: string;
-
-  /**
-   * Base URL for serving files
-   * @example "http://localhost:3000/storage"
-   */
   baseUrl: string;
 }
 
-/**
- * Local filesystem storage adapter
- * Stores files in a local directory and serves them via HTTP
- */
 export class LocalStorageAdapter implements StorageAdapter {
   constructor(private config: LocalStorageConfig) {}
 
@@ -32,13 +19,10 @@ export class LocalStorageAdapter implements StorageAdapter {
     try {
       const filePath = this.getFilePath(key);
 
-      // Create directory if it doesn't exist
       await mkdir(dirname(filePath), { recursive: true });
 
-      // Handle different data types
       let buffer: Buffer;
       if (data instanceof ReadableStream) {
-        // Convert ReadableStream to Buffer
         const reader = data.getReader();
         const chunks: Uint8Array[] = [];
 
@@ -53,7 +37,6 @@ export class LocalStorageAdapter implements StorageAdapter {
         buffer = data;
       }
 
-      // Write file
       await writeFile(filePath, buffer);
     } catch (error) {
       throw new StorageError(
@@ -85,8 +68,6 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   async getUrl(key: string, expiresIn?: number): Promise<string> {
-    // For local storage, expiration is not enforced (would need application-level logic)
-    // Return a URL that the application can serve
     return `${this.config.baseUrl}/${key}`;
   }
 
@@ -96,7 +77,6 @@ export class LocalStorageAdapter implements StorageAdapter {
       await unlink(filePath);
     } catch (error) {
       if ((error as any).code === "ENOENT") {
-        // File doesn't exist, consider it deleted
         return;
       }
       throw new StorageError(
@@ -117,11 +97,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     }
   }
 
-  /**
-   * Get the full filesystem path for a key
-   */
   private getFilePath(key: string): string {
-    // Normalize key to prevent directory traversal
     const normalizedKey = key.replace(/^\/+/, "").replace(/\.\.+/g, "");
     return join(this.config.basePath, normalizedKey);
   }

@@ -1,9 +1,19 @@
 # deps
 node_modules/
 
+# Prisma generated client
 /src/generated/prisma
 
+# Environment
+.env
+
+# Local storage
+storage/
+
+# Database
+*.db
+*.db-journal
+
+# Docs (keep these in git)
 /CLAUDE.md
 /SPECS.md
-
-.env

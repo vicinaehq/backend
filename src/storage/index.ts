@@ -1,26 +1,15 @@
 import type { StorageAdapter } from "./interface";
 import { LocalStorageAdapter, type LocalStorageConfig } from "./local";
-import { S3StorageAdapter, type S3StorageConfig } from "./s3";
+import { VercelBlobStorageAdapter, type VercelBlobStorageConfig } from "./vercel-blob";
 
-/**
- * Storage provider types
- */
-export type StorageProvider = "local" | "s3";
+export type StorageProvider = "local" | "vercel-blob";
 
-/**
- * Configuration for storage factory
- */
 export interface StorageConfig {
   provider: StorageProvider;
   local?: LocalStorageConfig;
-  s3?: S3StorageConfig;
+  vercelBlob?: VercelBlobStorageConfig;
 }
 
-/**
- * Create a storage adapter based on configuration
- * @param config - Storage configuration
- * @returns Configured storage adapter instance
- */
 export function createStorage(config: StorageConfig): StorageAdapter {
   switch (config.provider) {
     case "local":
@@ -29,37 +18,17 @@ export function createStorage(config: StorageConfig): StorageAdapter {
       }
       return new LocalStorageAdapter(config.local);
 
-    case "s3":
-      if (!config.s3) {
-        throw new Error("S3 storage config is required when provider is 's3'");
+    case "vercel-blob":
+      if (!config.vercelBlob) {
+        throw new Error("Vercel Blob storage config is required when provider is 'vercel-blob'");
       }
-      return new S3StorageAdapter(config.s3);
+      return new VercelBlobStorageAdapter(config.vercelBlob);
 
     default:
       throw new Error(`Unknown storage provider: ${config.provider}`);
   }
 }
 
-/**
- * Create storage from environment variables
- * Supports the following env vars:
- *
- * Common:
- * - STORAGE_PROVIDER: "local" or "s3"
- *
- * Local storage:
- * - LOCAL_STORAGE_PATH: Base directory for file storage
- * - LOCAL_STORAGE_URL: Base URL for serving files
- *
- * S3 storage:
- * - S3_REGION: AWS region
- * - S3_BUCKET: Bucket name
- * - S3_ACCESS_KEY_ID: AWS access key (optional if using IAM)
- * - S3_SECRET_ACCESS_KEY: AWS secret key (optional if using IAM)
- * - S3_ENDPOINT: Custom endpoint for S3-compatible services (optional)
- * - S3_FORCE_PATH_STYLE: "true" to force path-style URLs (optional)
- * - S3_URL_EXPIRATION: Default URL expiration in seconds (optional)
- */
 export function createStorageFromEnv(): StorageAdapter {
   const provider = (process.env.STORAGE_PROVIDER || "local") as StorageProvider;
 
@@ -73,34 +42,24 @@ export function createStorageFromEnv(): StorageAdapter {
       basePath,
       baseUrl,
     };
-  } else if (provider === "s3") {
-    const region = process.env.S3_REGION;
-    const bucket = process.env.S3_BUCKET;
+  } else if (provider === "vercel-blob") {
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
 
-    if (!region || !bucket) {
-      throw new Error("S3_REGION and S3_BUCKET are required when STORAGE_PROVIDER=s3");
+    if (!token) {
+      throw new Error("BLOB_READ_WRITE_TOKEN is required when STORAGE_PROVIDER=vercel-blob");
     }
 
-    config.s3 = {
-      region,
-      bucket,
-      accessKeyId: process.env.S3_ACCESS_KEY_ID,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-      endpoint: process.env.S3_ENDPOINT,
-      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
-      defaultUrlExpiration: process.env.S3_URL_EXPIRATION
-        ? parseInt(process.env.S3_URL_EXPIRATION, 10)
-        : undefined,
+    config.vercelBlob = {
+      token,
     };
   }
 
   return createStorage(config);
 }
 
-// Re-export types and classes
 export type { StorageAdapter, StorageMetadata } from "./interface";
 export { StorageError } from "./interface";
 export type { LocalStorageConfig } from "./local";
 export { LocalStorageAdapter } from "./local";
-export type { S3StorageConfig } from "./s3";
-export { S3StorageAdapter } from "./s3";
+export type { VercelBlobStorageConfig } from "./vercel-blob";
+export { VercelBlobStorageAdapter } from "./vercel-blob";

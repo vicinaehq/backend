@@ -21,10 +21,13 @@ enum Platform {
 model Extension {
 	id String @id @default(nanoid())
 	name String
+	title String
 	description String
 	downloadCount Int @default(0)
 	// @vicinae/api dependency version
 	apiVersion String
+	// storage key for the archive (e.g., "extensions/author/name/latest.zip")
+	storageKey String
 	categories ExtensionCategory[]
 	createdAt DateTime @default(now())
 	updatedAt DateTime @updatedAt
@@ -32,6 +35,8 @@ model Extension {
 	authorId String
 	killListedAt DateTime? // to quickly blacklist an extension if for some reason we need to
 	platforms ExtensionPlatform[]
+
+	@@unique([authorId, name])
 }
 
 model ExtensionPlatform {
