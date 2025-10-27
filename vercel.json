@@ -1,0 +1,12 @@
+{
+  "buildCommand": "prisma generate && prisma migrate deploy && tsc -p tsconfig.build.json",
+  "outputDirectory": "dist",
+  "installCommand": "bun install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.js"
+    }
+  ]
+}
