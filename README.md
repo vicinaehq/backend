@@ -2,6 +2,16 @@
 
 This repository hosts the backend API for the Vicinae extension store. It handles extension submission, validation, storage, and discovery.
 
+## Architecture 
+
+This backend application has been made very simple by design:
+- Hono as the main HTTP framework, lightweight and has support for all the good stuff
+- SQLITE as the database provider
+- Local filesystem to store blobs such as uploaded extensions
+
+The main idea is that the backend should be very easy to deploy on a single VPS and to backup.
+Given what we use it for, it is good enough, and can still be upgraded to using a dedicated object storage or somehing like if necessary.
+
 ## Quick Start
 
 **Install dependencies:**
@@ -40,18 +50,12 @@ The API will be available at http://localhost:3000
 
 See [CLAUDE.md](./CLAUDE.md) for detailed API documentation.
 
-## Storage Options
+## Storage
 
-The API supports two storage backends:
-
-**Local filesystem** (default):
+The API uses local filesystem storage:
 - Files stored in `./storage` directory
 - Served directly by the API via `/storage/*` endpoint
-
-**Vercel Blob storage**:
-- Serverless blob storage from Vercel
-- Public URLs for downloads
-- Configure via environment variables (see `.env.example`)
+- Configure storage path and base URL via environment variables (see `.env.example`)
 
 ## Extension Format
 

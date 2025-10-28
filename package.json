@@ -1,12 +1,10 @@
 {
   "name": "store",
   "scripts": {
-    "dev": "bun run --hot src/index.ts",
-    "vercel-build": "prisma generate && prisma migrate deploy && tsc"
+    "dev": "bun run --hot src/index.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.18.0",
-    "@vercel/blob": "^2.0.0",
     "dotenv": "^17.2.3",
     "hono": "^4.10.3",
     "jszip": "^3.10.1",

@@ -4,6 +4,8 @@ import manifestSchema from '../schemas/manifest.js';
 import { z } from 'zod';
 import * as JSZip from 'jszip';
 import { prisma } from '../db.js';
+import { computeChecksum } from '../utils/checksum.js';
+import { updateTrendingStatus } from '../utils/trending.js';
 
 type AppContext = {
   Variables: {
@@ -27,6 +29,7 @@ app.post('/extension/upload', async (c) => {
   try {
     const body = await c.req.parseBody();
     const file = body['file'];
+	console.log(body);
 
     if (!file || !(file instanceof File)) {
       return c.json({ error: 'No file uploaded' }, 400);
@@ -48,7 +51,12 @@ app.post('/extension/upload', async (c) => {
     const arrayBuffer = await file.arrayBuffer();
     const zip = await JSZip.loadAsync(arrayBuffer);
 
+	zip.forEach((path) => {
+		console.log('path', path);
+	});
+
     const manifestFile = zip.file('package.json');
+
     if (!manifestFile) {
       return c.json({ error: 'Archive must contain package.json at root' }, 400);
     }
@@ -74,14 +82,8 @@ app.post('/extension/upload', async (c) => {
 
     const validatedManifest = validationResult.data;
 
-    if (validatedManifest.dependencies?.['@raycast/api']) {
-      return c.json(
-        {
-          error: 'This store only supports @vicinae/api. Please replace @raycast/api with @vicinae/api in your dependencies.',
-        },
-        400
-      );
-    }
+
+	console.log(validatedManifest);
 
     if (!validatedManifest.dependencies?.['@vicinae/api']) {
       return c.json(
@@ -99,8 +101,12 @@ app.post('/extension/upload', async (c) => {
     const extensionKey = `${authorHandle}/${extensionName}`;
     const storageKey = `extensions/${extensionKey}/latest.zip`;
 
+    // Compute checksum of the ZIP archive
+    const fileBuffer = Buffer.from(arrayBuffer);
+    const checksum = computeChecksum(fileBuffer);
+
     const storage = c.get('storage');
-    await storage.put(storageKey, Buffer.from(arrayBuffer), {
+    await storage.put(storageKey, fileBuffer, {
       contentType: 'application/zip',
       contentLength: file.size,
     });
@@ -149,25 +155,31 @@ app.post('/extension/upload', async (c) => {
         description: validatedManifest.description,
         apiVersion,
         storageKey,
+        checksum,
         authorId: user.id,
+		/*
         categories: {
           connect: categoryIds,
         },
         platforms: {
           connect: platformIds,
         },
+		*/
       },
       update: {
         title: extensionTitle,
         description: validatedManifest.description,
         apiVersion,
         storageKey,
+        checksum,
+		/*
         categories: {
           set: categoryIds,
         },
         platforms: {
           set: platformIds,
         },
+		*/
       },
     });
 
@@ -179,6 +191,7 @@ app.post('/extension/upload', async (c) => {
         name: extensionName,
         title: extensionTitle,
         author: authorHandle,
+        checksum: extension.checksum,
         downloadUrl,
         isNew: extension.createdAt.getTime() === extension.updatedAt.getTime(),
       },
@@ -251,6 +264,8 @@ app.get('/extensions/list', async (c) => {
           author: ext.author?.github?.id || 'unknown',
           downloadCount: ext.downloadCount,
           apiVersion: ext.apiVersion,
+          checksum: ext.checksum,
+          trending: ext.trending,
           categories: ext.categories.map((c) => c.name),
           platforms: ext.platforms.map((p) => p.id),
           downloadUrl,
@@ -335,6 +350,30 @@ app.post('/extensions/download-callback', async (c) => {
     }
 
     console.error('Download callback error:', error);
+    return c.json(
+      {
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+      500
+    );
+  }
+});
+
+app.post('/extensions/update-trending', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || authHeader !== `Bearer ${API_SECRET}`) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    await updateTrendingStatus();
+    return c.json({
+      success: true,
+      message: 'Trending status updated for all extensions',
+    });
+  } catch (error) {
+    console.error('Update trending error:', error);
     return c.json(
       {
         error: 'Internal server error',

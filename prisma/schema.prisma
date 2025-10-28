@@ -4,11 +4,10 @@
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
-  engineType = "client"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -29,6 +28,10 @@ model Extension {
 	apiVersion String
 	// storage key for the archive (e.g., "extensions/author/name/latest.zip")
 	storageKey String
+	// SHA-256 checksum of the ZIP archive for integrity verification
+	checksum String
+	// flag to indicate if extension is trending (e.g., high recent download velocity)
+	trending Boolean @default(false)
 	categories ExtensionCategory[]
 	createdAt DateTime @default(now())
 	updatedAt DateTime @updatedAt

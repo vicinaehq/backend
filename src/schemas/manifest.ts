@@ -296,7 +296,7 @@ export default z.object({
     .optional(),
   dependencies: z
     .object({
-      "@raycast/api": z
+      "@vicinae/api": z
         .string()
         .describe("The Vicinae API version used by this extension.")
         .optional(),
