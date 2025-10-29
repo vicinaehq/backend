@@ -1,0 +1,30 @@
+[Unit]
+Description=Vicinae Extension Store API
+After=network.target
+Documentation=https://github.com/vicinaehq/store
+
+[Service]
+Type=simple
+User=vicinae
+Group=vicinae
+WorkingDirectory=/opt/vicinae
+
+# Environment
+EnvironmentFile=/opt/vicinae/.env
+
+# Run the application
+ExecStart=/usr/local/bin/bun run start
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitBurst=5
+StartLimitInterval=60
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vicinae
+
+[Install]
+WantedBy=multi-user.target
