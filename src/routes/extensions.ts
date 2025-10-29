@@ -98,7 +98,8 @@ app.post('/extension/upload', async (c) => {
     const authorHandle = validatedManifest.author;
     const extensionName = validatedManifest.name;
     const extensionTitle = validatedManifest.title;
-    const extensionKey = `${authorHandle}/${extensionName}`;
+    // Normalize author handle to lowercase for consistent storage paths
+    const extensionKey = `${authorHandle.toLowerCase()}/${extensionName}`;
     const storageKey = `extensions/${extensionKey}/latest.zip`;
 
     // Compute checksum of the ZIP archive
@@ -117,16 +118,19 @@ app.post('/extension/upload', async (c) => {
     const githubUserInfo = await fetchGitHubUser(authorHandle);
     const displayName = getDisplayName(githubUserInfo, authorHandle);
 
+    // Normalize GitHub handle to lowercase for case-insensitive lookups
+    const normalizedHandle = authorHandle.toLowerCase();
+
     await prisma.gitHubUser.upsert({
-      where: { id: authorHandle },
-      create: { id: authorHandle },
+      where: { id: normalizedHandle },
+      create: { id: normalizedHandle },
       update: {},
     });
 
     const user = await prisma.user.upsert({
-      where: { githubId: authorHandle },
+      where: { githubId: normalizedHandle },
       create: {
-        githubId: authorHandle,
+        githubId: normalizedHandle,
         name: displayName,
       },
       update: {
@@ -346,19 +350,40 @@ app.get('/extensions/categories', async (c) => {
 	})));
 })
 
-// Map of extension ID to Set of IPs that have downloaded it
+// Map of extension key (author/name) to Set of IPs that have downloaded it
 const downloadIpMap = new Map<string, Set<string>>();
 
 // Download zip archive and count download
 // We use an in-memory IP map to not duplicate downloads for the same IP per extension.
-app.get('/extensions/:id/download', async (c) => {
-	const id = c.req.param('id');
+// GitHub usernames are case-insensitive, so we normalize to lowercase for lookups
+app.get('/extensions/:author/:name/download', async (c) => {
+	const author = c.req.param('author').toLowerCase(); // Normalize to lowercase
+	const name = c.req.param('name');
 	const storage = c.var.storage;
 	const clientIp = c.var.clientIp;
 
+	// Find user by GitHub handle
+	// Note: GitHub handles are case-insensitive, and we normalize to lowercase
+	const user = await prisma.user.findFirst({
+		where: {
+			github: {
+				id: author,
+			},
+		},
+	});
+
+	if (!user) {
+		return c.json({ error: 'Author not found' }, 404);
+	}
+
 	const extension = await prisma.extension.findUnique({
-		where: { id },
-		include: { author: true }
+		where: {
+			authorId_name: {
+				authorId: user.id,
+				name,
+			},
+		},
+		include: { author: true },
 	});
 
 	if (!extension) {
@@ -367,26 +392,29 @@ app.get('/extensions/:id/download', async (c) => {
 
 	const file = await storage.get(extension.storageKey);
 
+	// Use normalized author/name as the key for IP deduplication
+	const extensionKey = `${author}/${name}`;
+
 	// Check if this IP has already downloaded this extension
-	if (!downloadIpMap.has(id)) {
-		downloadIpMap.set(id, new Set<string>());
+	if (!downloadIpMap.has(extensionKey)) {
+		downloadIpMap.set(extensionKey, new Set<string>());
 	}
 
-	const ipSet = downloadIpMap.get(id)!;
+	const ipSet = downloadIpMap.get(extensionKey)!;
 	const isNewDownload = !ipSet.has(clientIp);
 
 	if (isNewDownload) {
 		ipSet.add(clientIp);
 		await prisma.extension.update({
-			where: { id },
-			data: { downloadCount: { increment: 1 } }
+			where: { id: extension.id },
+			data: { downloadCount: { increment: 1 } },
 		});
 	}
 
 	return new Response(file, {
 		headers: {
 			'Content-Type': 'application/zip',
-			'Content-Disposition': `attachment; filename="${extension.name}-latest.zip"`,
+			'Content-Disposition': `attachment; filename="${name}-latest.zip"`,
 		},
 	});
 });
@@ -439,10 +467,12 @@ app.get('/extensions/list', async (c) => {
 
     const items = await Promise.all(
       extensions.map(async (ext) => {
-        // Use the download endpoint instead of direct storage URL for tracking
-        const downloadUrl = `${baseUrl}/extensions/${ext.id}/download`;
         const authorHandle = ext.author?.github?.id || 'unknown';
         const authorName = ext.author?.name || authorHandle;
+
+        // Use the download endpoint instead of direct storage URL for tracking
+        // Normalize author handle to lowercase for consistent URLs
+        const downloadUrl = `${baseUrl}/extensions/${authorHandle.toLowerCase()}/${ext.name}/download`;
         const { sourceUrl } = getExtensionGitHubUrls(ext.name);
 
         // Get storage URLs for icons and README
