@@ -3,6 +3,7 @@
   "scripts": {
     "dev": "bun run --hot src/index.ts",
 	"start": "NODE_ENV=production bun run src/index.ts",
+	"type-check": "tsc --noEmit",
 	"prisma-deploy": "prisma migrate deploy"
   },
   "dependencies": {
