@@ -1,5 +1,5 @@
 [Unit]
-Description=Vicinae Extension Store API
+Description=Vicinae Backend
 After=network.target
 Documentation=https://github.com/vicinaehq/store
 

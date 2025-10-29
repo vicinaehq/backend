@@ -11,12 +11,7 @@ import { fetchGitHubUser, getDisplayName } from '../utils/github.js';
 import { getExtensionGitHubUrls, buildAssetUrl } from '../utils/repository.js';
 import { parseIcon } from '../utils/icons.js';
 import { getMimeType } from '../utils/mime.js';
-
-type AppContext = {
-  Variables: {
-    storage: StorageAdapter;
-  };
-};
+import type { AppContext } from '../types/app.js';
 
 const app = new Hono<AppContext>();
 
