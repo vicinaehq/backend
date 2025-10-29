@@ -11,6 +11,9 @@ jobs:
     name: Lint and Test
     runs-on: ubuntu-latest
 
+    env:
+      DATABASE_URL: "file:./test.db"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
