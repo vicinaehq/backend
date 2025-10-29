@@ -21,7 +21,7 @@ app.use('*', async (c, next) => {
 })
 
 app.get('/', (c) => {
-  return c.json({ message: 'Vicinae Extension Store API' })
+  return c.json({ message: 'Vicinae Extension Store API TEST' })
 })
 
 if (storage instanceof LocalStorageAdapter) {
