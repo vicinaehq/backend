@@ -43,12 +43,13 @@ export function getMimeType(filename: string): string {
 		// Video
 		'mp4': 'video/mp4',
 		'webm': 'video/webm',
-		'ogg': 'video/ogg',
+		'ogv': 'video/ogg',
 
 		// Audio
 		'mp3': 'audio/mpeg',
 		'wav': 'audio/wav',
 		'ogg': 'audio/ogg',
+		'oga': 'audio/ogg',
 	};
 
 	return mimeTypes[ext || ''] || 'application/octet-stream';
