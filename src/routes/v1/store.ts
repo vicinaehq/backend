@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
-import type { StorageAdapter } from '../../storage/index.js';
-import manifestSchema from '../../schemas/manifest.js';
+import type { StorageAdapter } from '@/storage/index.js';
+import manifestSchema from '@/schemas/manifest.js';
 import { z } from 'zod';
 import * as JSZip from 'jszip';
-import { prisma } from '../../db.js';
-import { computeChecksum } from '../../utils/checksum.js';
-import { updateTrendingStatus } from '../../utils/trending.js';
-import { getGitHubAvatarUrl } from '../../utils/avatar.js';
-import { fetchGitHubUser, getDisplayName } from '../../utils/github.js';
-import { getExtensionGitHubUrls, buildAssetUrl } from '../../utils/repository.js';
-import { parseIcon } from '../../utils/icons.js';
-import { getMimeType } from '../../utils/mime.js';
-import type { AppContext } from '../../types/app.js';
-import { slugify } from '../../utils/slugify.js';
+import { prisma } from '@/db.js';
+import { computeChecksum } from '@/utils/checksum.js';
+import { updateTrendingStatus } from '@/utils/trending.js';
+import { getGitHubAvatarUrl } from '@/utils/avatar.js';
+import { fetchGitHubUser, getDisplayName } from '@/utils/github.js';
+import { getExtensionGitHubUrls, buildAssetUrl } from '@/utils/repository.js';
+import { parseIcon } from '@/utils/icons.js';
+import { getMimeType } from '@/utils/mime.js';
+import type { AppContext } from '@/types/app.js';
+import { slugify } from '@/utils/slugify.js';
 
 const app = new Hono<AppContext>();
 

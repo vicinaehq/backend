@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
-import type { AppContext } from './types/app.js';
-import { prisma } from './db.js';
-import { VALID_PLATFORMS } from './constants/platforms.js';
-import { createStorageFromEnv, LocalStorageAdapter } from './storage/index.js';
-import { ipMiddleware } from './middleware/ip.js';
-import storageRouter from './routes/storage.js';
-import v1 from './routes/v1';
+import type { AppContext } from '@/types/app.js';
+import { prisma } from '@/db.js';
+import { VALID_PLATFORMS } from '@/constants/platforms.js';
+import { createStorageFromEnv, LocalStorageAdapter } from '@/storage/index.js';
+import { ipMiddleware } from '@/middleware/ip.js';
+import storageRouter from '@/routes/storage.js';
+import v1 from '@/routes/v1/index.js';
 
 await prisma.$transaction(
 	VALID_PLATFORMS.map(p => prisma.extensionPlatform.upsert({

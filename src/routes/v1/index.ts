@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { createStorageFromEnv, LocalStorageAdapter } from '../../storage/index.js';
-import type { AppContext } from '../../types/app.js';
+import { createStorageFromEnv, LocalStorageAdapter } from '@/storage/index.js';
+import type { AppContext } from '@/types/app.js';
 import storeRouter from './store.js'
-import localStorageRouter from '../storage.js'
+import localStorageRouter from '@/routes/storage.js'
 
 const storage = createStorageFromEnv();
 const baseUrl = process.env.API_BASE_URL || 'http://localhost:3000';

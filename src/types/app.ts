@@ -1,4 +1,4 @@
-import type { StorageAdapter } from "../storage"
+import type { StorageAdapter } from "@/storage/index.js"
 
 export type AppContext = {
   Variables: {

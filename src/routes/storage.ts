@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { getMimeType } from "../utils/mime";
-import type { AppContext } from '../types/app.js';
+import { getMimeType } from "@/utils/mime.js";
+import type { AppContext } from '@/types/app.js';
 
 const app = new Hono<AppContext>();
 

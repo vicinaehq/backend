@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
-import type { AppContext } from '../types/app.js';
+import type { AppContext } from '@/types/app.js';
 
 /**
  * Middleware to extract and store the real client IP in context.
