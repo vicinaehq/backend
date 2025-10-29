@@ -35,6 +35,7 @@ CREATE TABLE "GitHubUser" (
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT,
     "githubId" TEXT NOT NULL,
     CONSTRAINT "User_githubId_fkey" FOREIGN KEY ("githubId") REFERENCES "GitHubUser" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );

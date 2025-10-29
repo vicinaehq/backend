@@ -32,7 +32,13 @@ model Extension {
 	checksum String
 	// flag to indicate if extension is trending (e.g., high recent download velocity)
 	trending Boolean @default(false)
+	// Extension icon storage keys
+	iconLight String?
+	iconDark String?
+	// README storage key
+	readmeKey String?
 	categories ExtensionCategory[]
+	commands Command[]
 	createdAt DateTime @default(now())
 	updatedAt DateTime @updatedAt
 	author User? @relation(fields: [authorId], references: [id])
@@ -41,6 +47,24 @@ model Extension {
 	platforms ExtensionPlatform[]
 
 	@@unique([authorId, name])
+}
+
+model Command {
+	id String @id @default(nanoid())
+	name String
+	title String
+	subtitle String?
+	description String?
+	keywords Json // array of strings
+	mode String // "view" | "no-view" | "menu-bar"
+	disabledByDefault Boolean @default(false)
+	beta Boolean @default(false)
+	iconLight String?
+	iconDark String?
+	extension Extension @relation(fields: [extensionId], references: [id], onDelete: Cascade)
+	extensionId String
+
+	@@unique([extensionId, name])
 }
 
 model ExtensionPlatform {
@@ -61,7 +85,8 @@ model GitHubUser {
 
 model User {
 	id String @id @default(nanoid())
+	name String? // Display name (e.g., from GitHub or other auth providers)
 	github GitHubUser? @relation(fields: [githubId], references: [id])
 	githubId String @unique
-	extensions Extension[] 
+	extensions Extension[]
 }

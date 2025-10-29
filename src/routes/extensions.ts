@@ -6,6 +6,11 @@ import * as JSZip from 'jszip';
 import { prisma } from '../db.js';
 import { computeChecksum } from '../utils/checksum.js';
 import { updateTrendingStatus } from '../utils/trending.js';
+import { getGitHubAvatarUrl } from '../utils/avatar.js';
+import { fetchGitHubUser, getDisplayName } from '../utils/github.js';
+import { getExtensionGitHubUrls, buildAssetUrl } from '../utils/repository.js';
+import { parseIcon } from '../utils/icons.js';
+import { getMimeType } from '../utils/mime.js';
 
 type AppContext = {
   Variables: {
@@ -113,6 +118,10 @@ app.post('/extension/upload', async (c) => {
 
     const downloadUrl = await storage.getUrl(storageKey);
 
+    // Fetch GitHub user info to populate name
+    const githubUserInfo = await fetchGitHubUser(authorHandle);
+    const displayName = getDisplayName(githubUserInfo, authorHandle);
+
     await prisma.gitHubUser.upsert({
       where: { id: authorHandle },
       create: { id: authorHandle },
@@ -121,8 +130,13 @@ app.post('/extension/upload', async (c) => {
 
     const user = await prisma.user.upsert({
       where: { githubId: authorHandle },
-      create: { githubId: authorHandle },
-      update: {},
+      create: {
+        githubId: authorHandle,
+        name: displayName,
+      },
+      update: {
+        name: displayName, // Update name on each upload in case it changed
+      },
     });
 
     const categoryNames = validatedManifest.categories || [];
@@ -142,6 +156,52 @@ app.post('/extension/upload', async (c) => {
       platformIds.push({ id: platform });
     }
 
+    // Parse extension icon to determine light/dark variations
+    const extensionIcon = parseIcon(validatedManifest.icon);
+
+    // Extract and store icon files from ZIP
+    let iconLightKey: string | null = null;
+    let iconDarkKey: string | null = null;
+
+    if (extensionIcon.light) {
+      const iconPath = extensionIcon.light.startsWith('assets/')
+        ? extensionIcon.light
+        : `assets/${extensionIcon.light}`;
+      const iconFile = zip.file(iconPath);
+      if (iconFile) {
+        const iconBuffer = await iconFile.async('nodebuffer');
+        iconLightKey = `extensions/${extensionKey}/${extensionIcon.light}`;
+        await storage.put(iconLightKey, iconBuffer, {
+          contentType: getMimeType(extensionIcon.light),
+        });
+      }
+    }
+
+    if (extensionIcon.dark) {
+      const iconPath = extensionIcon.dark.startsWith('assets/')
+        ? extensionIcon.dark
+        : `assets/${extensionIcon.dark}`;
+      const iconFile = zip.file(iconPath);
+      if (iconFile) {
+        const iconBuffer = await iconFile.async('nodebuffer');
+        iconDarkKey = `extensions/${extensionKey}/${extensionIcon.dark}`;
+        await storage.put(iconDarkKey, iconBuffer, {
+          contentType: getMimeType(extensionIcon.dark),
+        });
+      }
+    }
+
+    // Extract and store README
+    let readmeKey: string | null = null;
+    const readmeFile = zip.file('README.md');
+    if (readmeFile) {
+      const readmeBuffer = await readmeFile.async('nodebuffer');
+      readmeKey = `extensions/${extensionKey}/README.md`;
+      await storage.put(readmeKey, readmeBuffer, {
+        contentType: 'text/markdown',
+      });
+    }
+
     const extension = await prisma.extension.upsert({
       where: {
         authorId_name: {
@@ -156,6 +216,9 @@ app.post('/extension/upload', async (c) => {
         apiVersion,
         storageKey,
         checksum,
+        iconLight: iconLightKey,
+        iconDark: iconDarkKey,
+        readmeKey,
         authorId: user.id,
 		/*
         categories: {
@@ -172,6 +235,9 @@ app.post('/extension/upload', async (c) => {
         apiVersion,
         storageKey,
         checksum,
+        iconLight: iconLightKey,
+        iconDark: iconDarkKey,
+        readmeKey,
 		/*
         categories: {
           set: categoryIds,
@@ -183,6 +249,66 @@ app.post('/extension/upload', async (c) => {
       },
     });
 
+    // Delete existing commands and recreate them (simpler than updating)
+    await prisma.command.deleteMany({
+      where: { extensionId: extension.id },
+    });
+
+    // Create commands from manifest
+    const commands = validatedManifest.commands || [];
+    for (const cmd of commands) {
+      // Parse command icon to determine light/dark variations
+      const commandIcon = parseIcon(cmd.icon);
+
+      // Extract and store command icons
+      let cmdIconLightKey: string | null = null;
+      let cmdIconDarkKey: string | null = null;
+
+      if (commandIcon.light) {
+        const iconPath = commandIcon.light.startsWith('assets/')
+          ? commandIcon.light
+          : `assets/${commandIcon.light}`;
+        const iconFile = zip.file(iconPath);
+        if (iconFile) {
+          const iconBuffer = await iconFile.async('nodebuffer');
+          cmdIconLightKey = `extensions/${extensionKey}/${commandIcon.light}`;
+          await storage.put(cmdIconLightKey, iconBuffer, {
+            contentType: getMimeType(commandIcon.light),
+          });
+        }
+      }
+
+      if (commandIcon.dark) {
+        const iconPath = commandIcon.dark.startsWith('assets/')
+          ? commandIcon.dark
+          : `assets/${commandIcon.dark}`;
+        const iconFile = zip.file(iconPath);
+        if (iconFile) {
+          const iconBuffer = await iconFile.async('nodebuffer');
+          cmdIconDarkKey = `extensions/${extensionKey}/${commandIcon.dark}`;
+          await storage.put(cmdIconDarkKey, iconBuffer, {
+            contentType: getMimeType(commandIcon.dark),
+          });
+        }
+      }
+
+      await prisma.command.create({
+        data: {
+          extensionId: extension.id,
+          name: cmd.name,
+          title: cmd.title,
+          subtitle: cmd.subtitle || null,
+          description: cmd.description || null,
+          keywords: cmd.keywords || [],
+          mode: cmd.mode,
+          disabledByDefault: cmd.disabledByDefault || false,
+          beta: cmd.beta || false,
+          iconLight: cmdIconLightKey,
+          iconDark: cmdIconDarkKey,
+        },
+      });
+    }
+
     return c.json({
       success: true,
       extension: {
@@ -190,7 +316,12 @@ app.post('/extension/upload', async (c) => {
         key: extensionKey,
         name: extensionName,
         title: extensionTitle,
-        author: authorHandle,
+        author: {
+          handle: authorHandle,
+          name: displayName,
+          avatarUrl: getGitHubAvatarUrl(authorHandle),
+          profileUrl: `https://github.com/${authorHandle}`,
+        },
         checksum: extension.checksum,
         downloadUrl,
         isNew: extension.createdAt.getTime() === extension.updatedAt.getTime(),
@@ -247,6 +378,7 @@ app.get('/extensions/list', async (c) => {
         },
         categories: true,
         platforms: true,
+        commands: true,
       },
     });
 
@@ -255,19 +387,63 @@ app.get('/extensions/list', async (c) => {
     const items = await Promise.all(
       extensions.map(async (ext) => {
         const downloadUrl = await storage.getUrl(ext.storageKey);
+        const authorHandle = ext.author?.github?.id || 'unknown';
+        const authorName = ext.author?.name || authorHandle;
+        const { sourceUrl } = getExtensionGitHubUrls(ext.name);
+
+        // Get storage URLs for icons and README
+        const iconLightUrl = ext.iconLight ? await storage.getUrl(ext.iconLight) : null;
+        const iconDarkUrl = ext.iconDark ? await storage.getUrl(ext.iconDark) : null;
+        const readmeUrl = ext.readmeKey ? await storage.getUrl(ext.readmeKey) : null;
+
+        // Get command icon URLs
+        const commandsWithIcons = await Promise.all(
+          ext.commands.map(async (cmd) => {
+            const cmdIconLight = cmd.iconLight ? await storage.getUrl(cmd.iconLight) : null;
+            const cmdIconDark = cmd.iconDark ? await storage.getUrl(cmd.iconDark) : null;
+
+            return {
+              id: cmd.id,
+              name: cmd.name,
+              title: cmd.title,
+              subtitle: cmd.subtitle,
+              description: cmd.description,
+              keywords: cmd.keywords as string[],
+              mode: cmd.mode,
+              disabled_by_default: cmd.disabledByDefault,
+              beta: cmd.beta,
+              icons: {
+                light: cmdIconLight,
+                dark: cmdIconDark,
+              },
+            };
+          })
+        );
 
         return {
           id: ext.id,
           name: ext.name,
           title: ext.title,
           description: ext.description,
-          author: ext.author?.github?.id || 'unknown',
+          author: {
+            handle: authorHandle,
+            name: authorName,
+            avatarUrl: getGitHubAvatarUrl(authorHandle),
+            profileUrl: `https://github.com/${authorHandle}`,
+          },
           downloadCount: ext.downloadCount,
           apiVersion: ext.apiVersion,
           checksum: ext.checksum,
           trending: ext.trending,
+          icons: {
+            light: iconLightUrl,
+            dark: iconDarkUrl,
+          },
           categories: ext.categories.map((c) => c.name),
           platforms: ext.platforms.map((p) => p.id),
+          commands: commandsWithIcons,
+          sourceUrl,
+          readmeUrl,
           downloadUrl,
           createdAt: ext.createdAt.toISOString(),
           updatedAt: ext.updatedAt.toISOString(),

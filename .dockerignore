@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+bun.lock
+
+# Development
+.git/
+.gitignore
+*.md
+!README.md
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+dist/
+build/
+*.log
+
+# Data directories (managed via volumes)
+storage/
+data/
+dev.db
+dev.db-journal
+
+# Prisma
+prisma/migrations/
+*.db
+*.db-journal
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Testing
+coverage/
+*.test.ts
+*.spec.ts
+
+# OS
+.DS_Store
+Thumbs.db
