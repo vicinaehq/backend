@@ -5,5 +5,6 @@ export type AppContext = {
     storage: StorageAdapter
     clientIp: string
     baseUrl: string
+	version: `v${number}`;
   }
 }

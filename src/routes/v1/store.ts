@@ -1,18 +1,18 @@
 import { Hono } from 'hono';
-import type { StorageAdapter } from '../storage/index.js';
-import manifestSchema from '../schemas/manifest.js';
+import type { StorageAdapter } from '../../storage/index.js';
+import manifestSchema from '../../schemas/manifest.js';
 import { z } from 'zod';
 import * as JSZip from 'jszip';
-import { prisma } from '../db.js';
-import { computeChecksum } from '../utils/checksum.js';
-import { updateTrendingStatus } from '../utils/trending.js';
-import { getGitHubAvatarUrl } from '../utils/avatar.js';
-import { fetchGitHubUser, getDisplayName } from '../utils/github.js';
-import { getExtensionGitHubUrls, buildAssetUrl } from '../utils/repository.js';
-import { parseIcon } from '../utils/icons.js';
-import { getMimeType } from '../utils/mime.js';
-import type { AppContext } from '../types/app.js';
-import { slugify } from '../utils/slugify.js';
+import { prisma } from '../../db.js';
+import { computeChecksum } from '../../utils/checksum.js';
+import { updateTrendingStatus } from '../../utils/trending.js';
+import { getGitHubAvatarUrl } from '../../utils/avatar.js';
+import { fetchGitHubUser, getDisplayName } from '../../utils/github.js';
+import { getExtensionGitHubUrls, buildAssetUrl } from '../../utils/repository.js';
+import { parseIcon } from '../../utils/icons.js';
+import { getMimeType } from '../../utils/mime.js';
+import type { AppContext } from '../../types/app.js';
+import { slugify } from '../../utils/slugify.js';
 
 const app = new Hono<AppContext>();
 
@@ -111,7 +111,7 @@ async function formatExtensionResponse(
 		})
 	);
 
-	const downloadUrl = `${baseUrl}/extensions/${authorHandle.toLowerCase()}/${extension.name}/download`;
+	const downloadUrl = `${baseUrl}/store/${authorHandle.toLowerCase()}/${extension.name}/download`;
 
 	return {
 		id: extension.id,
@@ -457,7 +457,7 @@ app.post('/extension/upload', async (c) => {
   }
 });
 
-app.get('/extensions/categories', async (c) => {
+app.get('/categories', async (c) => {
 	const categories = await prisma.extensionCategory.findMany({
 		select: {
 			id: true,
@@ -473,7 +473,7 @@ app.get('/extensions/categories', async (c) => {
 	})));
 });
 
-app.get('/extensions/search', async (c) => {
+app.get('/search', async (c) => {
 	try {
 		const query = c.req.query('q');
 		const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
@@ -559,7 +559,7 @@ app.get('/extensions/search', async (c) => {
 const downloadIpMap = new Map<string, Set<string>>();
 
 // Get detailed information about a specific extension
-app.get('/extensions/:author/:name', async (c) => {
+app.get('/:author/:name', async (c) => {
 	const author = c.req.param('author');
 	const name = c.req.param('name');
 	const storage = c.var.storage;
@@ -578,7 +578,7 @@ app.get('/extensions/:author/:name', async (c) => {
 // Download zip archive and count download
 // We use an in-memory IP map to not duplicate downloads for the same IP per extension.
 // GitHub usernames are case-insensitive, so we normalize to lowercase for lookups
-app.get('/extensions/:author/:name/download', async (c) => {
+app.get('/:author/:name/download', async (c) => {
 	const author = c.req.param('author').toLowerCase(); // Normalize to lowercase
 	const name = c.req.param('name');
 	const storage = c.var.storage;
@@ -619,7 +619,7 @@ app.get('/extensions/:author/:name/download', async (c) => {
 	});
 });
 
-app.get('/extensions/list', async (c) => {
+app.get('/list', async (c) => {
   try {
     const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
     const limit = Math.min(
@@ -693,7 +693,7 @@ app.get('/extensions/list', async (c) => {
   }
 });
 
-app.post('/extensions/update-trending', async (c) => {
+app.post('/update-trending', async (c) => {
   const authHeader = c.req.header('Authorization');
   if (!authHeader || authHeader !== `Bearer ${API_SECRET}`) {
     return c.json({ error: 'Unauthorized' }, 401);
