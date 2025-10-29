@@ -471,7 +471,89 @@ app.get('/extensions/categories', async (c) => {
 		name,
 		extensions: _count.extensions
 	})));
-})
+});
+
+app.get('/extensions/search', async (c) => {
+	try {
+		const query = c.req.query('q');
+		const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+		const limit = Math.min(
+			200,
+			Math.max(1, parseInt(c.req.query('limit') || String(DEFAULT_PAGE_SIZE), 10))
+		);
+		const skip = (page - 1) * limit;
+
+		if (!query || query.trim().length === 0) {
+			return c.json({ error: 'Search query is required' }, 400);
+		}
+
+		const searchTerm = query.trim().toLowerCase();
+		const storage = c.get('storage');
+		const baseUrl = c.get('baseUrl');
+
+		// Search extensions by name, title, or description
+		const where: any = {
+			AND: [
+				{ killListedAt: null },
+				{
+					OR: [
+						{ name: { contains: searchTerm } },
+						{ title: { contains: searchTerm } },
+						{ description: { contains: searchTerm } },
+					],
+				},
+			],
+		};
+
+		const total = await prisma.extension.count({ where });
+
+		const extensions = await prisma.extension.findMany({
+			where,
+			skip,
+			take: limit,
+			orderBy: {
+				downloadCount: 'desc',
+			},
+			include: {
+				author: {
+					include: {
+						github: true,
+					},
+				},
+				categories: true,
+				platforms: true,
+				commands: true,
+			},
+		});
+
+		// Format the extensions
+		const items = await Promise.all(
+			extensions.map((ext) => formatExtensionResponse(ext, storage, baseUrl))
+		);
+
+		return c.json({
+			extensions: items,
+			query: query.trim(),
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages: Math.ceil(total / limit),
+				hasNext: page < Math.ceil(total / limit),
+				hasPrev: page > 1,
+			},
+		});
+	} catch (error) {
+		console.error('Search extensions error:', error);
+		return c.json(
+			{
+				error: 'Internal server error',
+				message: error instanceof Error ? error.message : 'Unknown error',
+			},
+			500
+		);
+	}
+});
 
 // Map of extension key (author/name) to Set of IPs that have downloaded it
 const downloadIpMap = new Map<string, Set<string>>();
