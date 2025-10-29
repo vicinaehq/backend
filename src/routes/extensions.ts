@@ -19,7 +19,6 @@ const app = new Hono<AppContext>();
 const API_SECRET = process.env.API_SECRET;
 const MAX_UPLOAD_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE || '10485760', 10);
 const DEFAULT_PAGE_SIZE = parseInt(process.env.DEFAULT_PAGE_SIZE || '100', 10);
-const downloadIpCache = new Map<string, Set<string>>();
 
 app.post('/extension/upload', async (c) => {
   const authHeader = c.req.header('Authorization');
@@ -347,6 +346,51 @@ app.get('/extensions/categories', async (c) => {
 	})));
 })
 
+// Map of extension ID to Set of IPs that have downloaded it
+const downloadIpMap = new Map<string, Set<string>>();
+
+// Download zip archive and count download
+// We use an in-memory IP map to not duplicate downloads for the same IP per extension.
+app.get('/extensions/:id/download', async (c) => {
+	const id = c.req.param('id');
+	const storage = c.var.storage;
+	const clientIp = c.var.clientIp;
+
+	const extension = await prisma.extension.findUnique({
+		where: { id },
+		include: { author: true }
+	});
+
+	if (!extension) {
+		return c.json({ error: 'Extension not found' }, 404);
+	}
+
+	const file = await storage.get(extension.storageKey);
+
+	// Check if this IP has already downloaded this extension
+	if (!downloadIpMap.has(id)) {
+		downloadIpMap.set(id, new Set<string>());
+	}
+
+	const ipSet = downloadIpMap.get(id)!;
+	const isNewDownload = !ipSet.has(clientIp);
+
+	if (isNewDownload) {
+		ipSet.add(clientIp);
+		await prisma.extension.update({
+			where: { id },
+			data: { downloadCount: { increment: 1 } }
+		});
+	}
+
+	return new Response(file, {
+		headers: {
+			'Content-Type': 'application/zip',
+			'Content-Disposition': `attachment; filename="${extension.name}-latest.zip"`,
+		},
+	});
+});
+
 app.get('/extensions/list', async (c) => {
   try {
     const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
@@ -391,10 +435,12 @@ app.get('/extensions/list', async (c) => {
     });
 
     const storage = c.get('storage');
+    const baseUrl = c.get('baseUrl');
 
     const items = await Promise.all(
       extensions.map(async (ext) => {
-        const downloadUrl = await storage.getUrl(ext.storageKey);
+        // Use the download endpoint instead of direct storage URL for tracking
+        const downloadUrl = `${baseUrl}/extensions/${ext.id}/download`;
         const authorHandle = ext.author?.github?.id || 'unknown';
         const authorName = ext.author?.name || authorHandle;
         const { sourceUrl } = getExtensionGitHubUrls(ext.name);
@@ -472,68 +518,6 @@ app.get('/extensions/list', async (c) => {
     });
   } catch (error) {
     console.error('List extensions error:', error);
-    return c.json(
-      {
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      500
-    );
-  }
-});
-
-app.post('/extensions/download-callback', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { extensionId } = body;
-
-    if (!extensionId || typeof extensionId !== 'string') {
-      return c.json({ error: 'extensionId is required' }, 400);
-    }
-
-    const clientIp = c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
-                     c.req.header('x-real-ip') ||
-                     'unknown';
-
-    let ipSet = downloadIpCache.get(extensionId);
-    if (!ipSet) {
-      ipSet = new Set();
-      downloadIpCache.set(extensionId, ipSet);
-    }
-
-    if (ipSet.has(clientIp)) {
-      return c.json({
-        success: true,
-        counted: false,
-        message: 'Download already tracked from this IP'
-      });
-    }
-
-    ipSet.add(clientIp);
-
-    const extension = await prisma.extension.update({
-      where: { id: extensionId },
-      data: {
-        downloadCount: {
-          increment: 1,
-        },
-      },
-      select: {
-        downloadCount: true,
-      },
-    });
-
-    return c.json({
-      success: true,
-      counted: true,
-      downloadCount: extension.downloadCount,
-    });
-  } catch (error) {
-    if ((error as any).code === 'P2025') {
-      return c.json({ error: 'Extension not found' }, 404);
-    }
-
-    console.error('Download callback error:', error);
     return c.json(
       {
         error: 'Internal server error',

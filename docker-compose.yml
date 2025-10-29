@@ -17,6 +17,7 @@ services:
       - DEFAULT_PAGE_SIZE=${DEFAULT_PAGE_SIZE:-100}
       - LOCAL_STORAGE_PATH=/app/storage
       - LOCAL_STORAGE_URL=https://${DOMAIN}/storage
+      - API_BASE_URL=https://${DOMAIN}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     volumes:
       # Persist database
