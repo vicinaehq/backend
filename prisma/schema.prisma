@@ -11,12 +11,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Platform {
-	Linux
-	MacOS
-	Windows
-}
-
 // always latest version
 model Extension {
 	id String @id @default(nanoid())
@@ -68,7 +62,7 @@ model Command {
 }
 
 model ExtensionPlatform {
-	id Platform @id
+	id String @id
 	extensions Extension[]
 }
 

@@ -12,6 +12,7 @@ import { getExtensionGitHubUrls, buildAssetUrl } from '../utils/repository.js';
 import { parseIcon } from '../utils/icons.js';
 import { getMimeType } from '../utils/mime.js';
 import type { AppContext } from '../types/app.js';
+import { slugify } from '../utils/slugify.js';
 
 const app = new Hono<AppContext>();
 
@@ -138,15 +139,15 @@ app.post('/extension/upload', async (c) => {
     const categoryIds = [];
     for (const categoryName of categoryNames) {
       const category = await prisma.extensionCategory.upsert({
-        where: { id: categoryName },
-        create: { id: categoryName, name: categoryName },
+        where: { id: slugify(categoryName) },
+        create: { id: slugify(categoryName), name: categoryName },
         update: {},
       });
       categoryIds.push({ id: category.id });
     }
 
     const platformIds = [];
-    const platforms = validatedManifest.platforms || ['Linux'];
+    const platforms = validatedManifest.platforms || ['linux'];
     for (const platform of platforms) {
       platformIds.push({ id: platform });
     }
@@ -215,14 +216,12 @@ app.post('/extension/upload', async (c) => {
         iconDark: iconDarkKey,
         readmeKey,
         authorId: user.id,
-		/*
         categories: {
           connect: categoryIds,
         },
         platforms: {
           connect: platformIds,
         },
-		*/
       },
       update: {
         title: extensionTitle,
@@ -233,14 +232,12 @@ app.post('/extension/upload', async (c) => {
         iconLight: iconLightKey,
         iconDark: iconDarkKey,
         readmeKey,
-		/*
         categories: {
           set: categoryIds,
         },
         platforms: {
           set: platformIds,
-        },
-		*/
+        }
       },
     });
 
@@ -334,6 +331,22 @@ app.post('/extension/upload', async (c) => {
   }
 });
 
+app.get('/extensions/categories', async (c) => {
+	const categories = await prisma.extensionCategory.findMany({
+		select: {
+			id: true,
+			name: true,
+			_count: { select: { extensions: true } },
+		}
+	});
+
+	return c.json(categories.map(({id, name, _count}) => ({
+		id,
+		name,
+		extensions: _count.extensions
+	})));
+})
+
 app.get('/extensions/list', async (c) => {
   try {
     const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
@@ -405,7 +418,7 @@ app.get('/extensions/list', async (c) => {
               description: cmd.description,
               keywords: cmd.keywords as string[],
               mode: cmd.mode,
-              disabled_by_default: cmd.disabledByDefault,
+              disabledByDefault: cmd.disabledByDefault,
               beta: cmd.beta,
               icons: {
                 light: cmdIconLight,
@@ -434,7 +447,7 @@ app.get('/extensions/list', async (c) => {
             light: iconLightUrl,
             dark: iconDarkUrl,
           },
-          categories: ext.categories.map((c) => c.name),
+          categories: ext.categories,
           platforms: ext.platforms.map((p) => p.id),
           commands: commandsWithIcons,
           sourceUrl,
