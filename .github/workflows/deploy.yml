@@ -39,14 +39,13 @@ jobs:
             # Run migrations
             bun run prisma-deploy
 
-            # Restart service
-            systemctl restart vicinae
+            sudo systemctl restart vicinae
 
             # Wait for service to be healthy
             echo "Waiting for service to start..."
             sleep 5
 
             # Verify service is running
-            systemctl is-active --quiet vicinae && echo "✅ Service is running" || echo "❌ Service failed to start"
+            sudo systemctl is-active --quiet vicinae && echo "✅ Service is running" || echo "❌ Service failed to start"
 
             echo "Deployment completed successfully!"
