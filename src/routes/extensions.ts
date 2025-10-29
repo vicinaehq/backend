@@ -20,6 +20,129 @@ const API_SECRET = process.env.API_SECRET;
 const MAX_UPLOAD_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE || '10485760', 10);
 const DEFAULT_PAGE_SIZE = parseInt(process.env.DEFAULT_PAGE_SIZE || '100', 10);
 
+/**
+ * Helper function to find a user by GitHub handle (case-insensitive)
+ */
+async function findUserByGitHubHandle(handle: string) {
+	const normalizedHandle = handle.toLowerCase();
+	return await prisma.user.findFirst({
+		where: {
+			github: {
+				id: normalizedHandle,
+			},
+		},
+		include: {
+			github: true,
+		},
+	});
+}
+
+/**
+ * Helper function to find an extension by author handle and name
+ */
+async function findExtensionByAuthorAndName(authorHandle: string, extensionName: string) {
+	const user = await findUserByGitHubHandle(authorHandle);
+	if (!user) {
+		return null;
+	}
+
+	return await prisma.extension.findUnique({
+		where: {
+			authorId_name: {
+				authorId: user.id,
+				name: extensionName,
+			},
+		},
+		include: {
+			author: {
+				include: {
+					github: true,
+				},
+			},
+			categories: true,
+			platforms: true,
+			commands: true,
+		},
+	});
+}
+
+/**
+ * Helper function to format extension data for API responses
+ */
+async function formatExtensionResponse(
+	extension: Awaited<ReturnType<typeof findExtensionByAuthorAndName>>,
+	storage: StorageAdapter,
+	baseUrl: string
+) {
+	if (!extension) {
+		return null;
+	}
+
+	const authorHandle = extension.author?.github?.id || 'unknown';
+	const authorName = extension.author?.name || authorHandle;
+	const { sourceUrl } = getExtensionGitHubUrls(extension.name);
+
+	// Get storage URLs for icons and README
+	const iconLightUrl = extension.iconLight ? await storage.getUrl(extension.iconLight) : null;
+	const iconDarkUrl = extension.iconDark ? await storage.getUrl(extension.iconDark) : null;
+	const readmeUrl = extension.readmeKey ? await storage.getUrl(extension.readmeKey) : null;
+
+	// Get command icon URLs
+	const commandsWithIcons = await Promise.all(
+		extension.commands.map(async (cmd) => {
+			const cmdIconLight = cmd.iconLight ? await storage.getUrl(cmd.iconLight) : null;
+			const cmdIconDark = cmd.iconDark ? await storage.getUrl(cmd.iconDark) : null;
+
+			return {
+				id: cmd.id,
+				name: cmd.name,
+				title: cmd.title,
+				subtitle: cmd.subtitle,
+				description: cmd.description,
+				keywords: cmd.keywords as string[],
+				mode: cmd.mode,
+				disabledByDefault: cmd.disabledByDefault,
+				beta: cmd.beta,
+				icons: {
+					light: cmdIconLight,
+					dark: cmdIconDark,
+				},
+			};
+		})
+	);
+
+	const downloadUrl = `${baseUrl}/extensions/${authorHandle.toLowerCase()}/${extension.name}/download`;
+
+	return {
+		id: extension.id,
+		name: extension.name,
+		title: extension.title,
+		description: extension.description,
+		author: {
+			handle: authorHandle,
+			name: authorName,
+			avatarUrl: getGitHubAvatarUrl(authorHandle),
+			profileUrl: `https://github.com/${authorHandle}`,
+		},
+		downloadCount: extension.downloadCount,
+		apiVersion: extension.apiVersion,
+		checksum: extension.checksum,
+		trending: extension.trending,
+		icons: {
+			light: iconLightUrl,
+			dark: iconDarkUrl,
+		},
+		categories: extension.categories,
+		platforms: extension.platforms.map((p) => p.id),
+		commands: commandsWithIcons,
+		sourceUrl,
+		readmeUrl,
+		downloadUrl,
+		createdAt: extension.createdAt.toISOString(),
+		updatedAt: extension.updatedAt.toISOString(),
+	};
+}
+
 app.post('/extension/upload', async (c) => {
   const authHeader = c.req.header('Authorization');
   if (!authHeader || authHeader !== `Bearer ${API_SECRET}`) {
@@ -353,6 +476,23 @@ app.get('/extensions/categories', async (c) => {
 // Map of extension key (author/name) to Set of IPs that have downloaded it
 const downloadIpMap = new Map<string, Set<string>>();
 
+// Get detailed information about a specific extension
+app.get('/extensions/:author/:name', async (c) => {
+	const author = c.req.param('author');
+	const name = c.req.param('name');
+	const storage = c.var.storage;
+	const baseUrl = c.var.baseUrl;
+
+	const extension = await findExtensionByAuthorAndName(author, name);
+
+	if (!extension) {
+		return c.json({ error: 'Extension not found' }, 404);
+	}
+
+	const formatted = await formatExtensionResponse(extension, storage, baseUrl);
+	return c.json(formatted);
+});
+
 // Download zip archive and count download
 // We use an in-memory IP map to not duplicate downloads for the same IP per extension.
 // GitHub usernames are case-insensitive, so we normalize to lowercase for lookups
@@ -362,29 +502,7 @@ app.get('/extensions/:author/:name/download', async (c) => {
 	const storage = c.var.storage;
 	const clientIp = c.var.clientIp;
 
-	// Find user by GitHub handle
-	// Note: GitHub handles are case-insensitive, and we normalize to lowercase
-	const user = await prisma.user.findFirst({
-		where: {
-			github: {
-				id: author,
-			},
-		},
-	});
-
-	if (!user) {
-		return c.json({ error: 'Author not found' }, 404);
-	}
-
-	const extension = await prisma.extension.findUnique({
-		where: {
-			authorId_name: {
-				authorId: user.id,
-				name,
-			},
-		},
-		include: { author: true },
-	});
+	const extension = await findExtensionByAuthorAndName(author, name);
 
 	if (!extension) {
 		return c.json({ error: 'Extension not found' }, 404);
@@ -465,74 +583,9 @@ app.get('/extensions/list', async (c) => {
     const storage = c.get('storage');
     const baseUrl = c.get('baseUrl');
 
+    // Use the helper function to format each extension
     const items = await Promise.all(
-      extensions.map(async (ext) => {
-        const authorHandle = ext.author?.github?.id || 'unknown';
-        const authorName = ext.author?.name || authorHandle;
-
-        // Use the download endpoint instead of direct storage URL for tracking
-        // Normalize author handle to lowercase for consistent URLs
-        const downloadUrl = `${baseUrl}/extensions/${authorHandle.toLowerCase()}/${ext.name}/download`;
-        const { sourceUrl } = getExtensionGitHubUrls(ext.name);
-
-        // Get storage URLs for icons and README
-        const iconLightUrl = ext.iconLight ? await storage.getUrl(ext.iconLight) : null;
-        const iconDarkUrl = ext.iconDark ? await storage.getUrl(ext.iconDark) : null;
-        const readmeUrl = ext.readmeKey ? await storage.getUrl(ext.readmeKey) : null;
-
-        // Get command icon URLs
-        const commandsWithIcons = await Promise.all(
-          ext.commands.map(async (cmd) => {
-            const cmdIconLight = cmd.iconLight ? await storage.getUrl(cmd.iconLight) : null;
-            const cmdIconDark = cmd.iconDark ? await storage.getUrl(cmd.iconDark) : null;
-
-            return {
-              id: cmd.id,
-              name: cmd.name,
-              title: cmd.title,
-              subtitle: cmd.subtitle,
-              description: cmd.description,
-              keywords: cmd.keywords as string[],
-              mode: cmd.mode,
-              disabledByDefault: cmd.disabledByDefault,
-              beta: cmd.beta,
-              icons: {
-                light: cmdIconLight,
-                dark: cmdIconDark,
-              },
-            };
-          })
-        );
-
-        return {
-          id: ext.id,
-          name: ext.name,
-          title: ext.title,
-          description: ext.description,
-          author: {
-            handle: authorHandle,
-            name: authorName,
-            avatarUrl: getGitHubAvatarUrl(authorHandle),
-            profileUrl: `https://github.com/${authorHandle}`,
-          },
-          downloadCount: ext.downloadCount,
-          apiVersion: ext.apiVersion,
-          checksum: ext.checksum,
-          trending: ext.trending,
-          icons: {
-            light: iconLightUrl,
-            dark: iconDarkUrl,
-          },
-          categories: ext.categories,
-          platforms: ext.platforms.map((p) => p.id),
-          commands: commandsWithIcons,
-          sourceUrl,
-          readmeUrl,
-          downloadUrl,
-          createdAt: ext.createdAt.toISOString(),
-          updatedAt: ext.updatedAt.toISOString(),
-        };
-      })
+      extensions.map((ext) => formatExtensionResponse(ext, storage, baseUrl))
     );
 
     return c.json({
