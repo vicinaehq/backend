@@ -1,7 +1,8 @@
 {
   "name": "store",
   "scripts": {
-    "dev": "bun run --hot src/index.ts"
+    "dev": "bun run --hot src/index.ts",
+	"start": "NODE_ENV=production bun run src/index.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.18.0",
