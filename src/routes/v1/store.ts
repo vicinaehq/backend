@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { StorageAdapter } from '@/storage/index.js';
 import manifestSchema from '@/schemas/manifest.js';
+import path from 'node:path';
 import { z } from 'zod';
 import * as JSZip from 'jszip';
 import { prisma } from '@/db.js';
@@ -143,7 +144,18 @@ async function formatExtensionResponse(
 	};
 }
 
-app.post('/extension/upload', async (c) => {
+const packZipFile = (archive: typeof JSZip.default, name: string) => {
+	const zip = new JSZip.default;
+	archive.forEach((file => {
+		const f = archive.file(file);
+		if (f) {
+			zip.file(path.join(name, file), f.async('nodebuffer'));
+		}
+	}));
+	return zip;
+}
+
+app.post('/upload', async (c) => {
   const authHeader = c.req.header('Authorization');
   if (!authHeader || authHeader !== `Bearer ${API_SECRET}`) {
     return c.json({ error: 'Unauthorized' }, 401);
@@ -152,7 +164,6 @@ app.post('/extension/upload', async (c) => {
   try {
     const body = await c.req.parseBody();
     const file = body['file'];
-	console.log(body);
 
     if (!file || !(file instanceof File)) {
       return c.json({ error: 'No file uploaded' }, 400);
@@ -173,11 +184,6 @@ app.post('/extension/upload', async (c) => {
 
     const arrayBuffer = await file.arrayBuffer();
     const zip = await JSZip.loadAsync(arrayBuffer);
-
-	zip.forEach((path) => {
-		console.log('path', path);
-	});
-
     const manifestFile = zip.file('package.json');
 
     if (!manifestFile) {
@@ -205,9 +211,6 @@ app.post('/extension/upload', async (c) => {
 
     const validatedManifest = validationResult.data;
 
-
-	console.log(validatedManifest);
-
     if (!validatedManifest.dependencies?.['@vicinae/api']) {
       return c.json(
         {
@@ -228,9 +231,11 @@ app.post('/extension/upload', async (c) => {
     // Compute checksum of the ZIP archive
     const fileBuffer = Buffer.from(arrayBuffer);
     const checksum = computeChecksum(fileBuffer);
-
     const storage = c.get('storage');
-    await storage.put(storageKey, fileBuffer, {
+	const packedZipFile = packZipFile(zip, extensionName);
+	const packed = await packedZipFile.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+    await storage.put(storageKey, packed, {
       contentType: 'application/zip',
       contentLength: file.size,
     });
