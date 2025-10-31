@@ -81,12 +81,11 @@ async function formatExtensionResponse(
 
 	const authorHandle = extension.author?.github?.id || 'unknown';
 	const authorName = extension.author?.name || authorHandle;
-	const { sourceUrl } = getExtensionGitHubUrls(extension.name);
+	const { sourceUrl, readmeUrl } = getExtensionGitHubUrls(extension.name);
 
 	// Get storage URLs for icons and README
 	const iconLightUrl = extension.iconLight ? await storage.getUrl(extension.iconLight) : null;
 	const iconDarkUrl = extension.iconDark ? await storage.getUrl(extension.iconDark) : null;
-	const readmeUrl = extension.readmeKey ? await storage.getUrl(extension.readmeKey) : null;
 
 	// Get command icon URLs
 	const commandsWithIcons = await Promise.all(

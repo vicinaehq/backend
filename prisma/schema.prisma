@@ -29,8 +29,6 @@ model Extension {
 	// Extension icon storage keys
 	iconLight String?
 	iconDark String?
-	// README storage key
-	readmeKey String?
 	categories ExtensionCategory[]
 	commands Command[]
 	createdAt DateTime @default(now())

@@ -9,11 +9,30 @@ CREATE TABLE "Extension" (
     "storageKey" TEXT NOT NULL,
     "checksum" TEXT NOT NULL,
     "trending" BOOLEAN NOT NULL DEFAULT false,
+    "iconLight" TEXT,
+    "iconDark" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "authorId" TEXT NOT NULL,
     "killListedAt" DATETIME,
     CONSTRAINT "Extension_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "Command" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "subtitle" TEXT,
+    "description" TEXT,
+    "keywords" JSONB NOT NULL,
+    "mode" TEXT NOT NULL,
+    "disabledByDefault" BOOLEAN NOT NULL DEFAULT false,
+    "beta" BOOLEAN NOT NULL DEFAULT false,
+    "iconLight" TEXT,
+    "iconDark" TEXT,
+    "extensionId" TEXT NOT NULL,
+    CONSTRAINT "Command_extensionId_fkey" FOREIGN KEY ("extensionId") REFERENCES "Extension" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -58,6 +77,9 @@ CREATE TABLE "_ExtensionToExtensionPlatform" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Extension_authorId_name_key" ON "Extension"("authorId", "name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Command_extensionId_name_key" ON "Command"("extensionId", "name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_githubId_key" ON "User"("githubId");
