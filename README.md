@@ -1,18 +1,24 @@
-# Vicinae Store Backend
+# Vicinae Backend
 
-This repository hosts the backend API for the Vicinae extension store. It handles extension submission, validation, storage, and discovery.
+Backend for the Vicinae extension store.
 
-## Architecture 
+Currently hosted by [@aurelleb](https://github.com/aurelleb) on a [hetzner](https://www.hetzner.com/) VPS.
 
-This backend application has been made very simple by design:
-- Hono as the main HTTP framework, lightweight and has support for all the good stuff
-- SQLITE as the database provider
-- Local filesystem to store blobs such as uploaded extensions, icons...
+## Architecture
 
-The main idea is that the backend should be very easy to deploy on a single VPS and to backup.
-Given what we use it for, it is good enough, and can still be upgraded to using a dedicated object storage or somehing like if necessary.
+The architecture of this service is very simple on purpose.
 
-## Quick Start
+- Hono to serve web requests
+- Prisma + sqlite to maintain the list of available extensions in database
+- Assets and extension code stored on the local filesystem (could be easily moved to an actual object storage service if needed)
+
+## Vicinae integration
+
+The Vicinae extension store command makes requests to this backend service to retrieve extension-related content.
+
+Vicinae does **not** contact the service outside of this command.
+
+## Development
 
 **Install dependencies:**
 ```sh
