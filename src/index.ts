@@ -7,6 +7,7 @@ import { ipMiddleware } from '@/middleware/ip.js';
 import storageRouter from '@/routes/storage.js';
 import v1 from '@/routes/v1/index.js';
 import { authMiddleware } from './middleware/auth';
+import { logger } from 'hono/logger'
 
 await prisma.$transaction(
 	VALID_PLATFORMS.map(p => prisma.extensionPlatform.upsert({
@@ -19,6 +20,7 @@ await prisma.$transaction(
 const app = new Hono<AppContext>()
 const storage = createStorageFromEnv();
 
+app.use(logger());
 app.use('*', ipMiddleware());
 app.use('*', authMiddleware());
 app.use('*', async (c, next) => {
