@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import type { StorageAdapter } from '@/storage/index.js';
 import manifestSchema from '@/schemas/manifest.js';
 import path from 'node:path';
-import { z } from 'zod';
 import * as JSZip from 'jszip';
 import { prisma } from '@/db.js';
 import { computeChecksum } from '@/utils/checksum.js';
@@ -317,17 +316,6 @@ app.post('/upload', async (c) => {
       }
     }
 
-    // Extract and store README
-    let readmeKey: string | null = null;
-    const readmeFile = zip.file('README.md');
-    if (readmeFile) {
-      const readmeBuffer = await readmeFile.async('nodebuffer');
-      readmeKey = `extensions/${extensionKey}/README.md`;
-      await storage.put(readmeKey, readmeBuffer, {
-        contentType: 'text/markdown',
-      });
-    }
-
     const extension = await prisma.extension.upsert({
       where: {
         authorId_name: {
@@ -344,7 +332,6 @@ app.post('/upload', async (c) => {
         checksum,
         iconLight: iconLightKey,
         iconDark: iconDarkKey,
-        readmeKey,
         authorId: user.id,
         categories: {
           connect: categoryIds,
@@ -361,7 +348,6 @@ app.post('/upload', async (c) => {
         checksum,
         iconLight: iconLightKey,
         iconDark: iconDarkKey,
-        readmeKey,
         categories: {
           set: categoryIds,
         },
