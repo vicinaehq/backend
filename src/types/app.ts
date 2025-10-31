@@ -6,5 +6,6 @@ export type AppContext = {
     clientIp: string
     baseUrl: string
 	version: `v${number}`;
+	authenticated: boolean;
   }
 }

@@ -13,7 +13,6 @@ const v1 = new Hono<AppContext>()
 v1.use('*', async (c, next) => {
   c.set('baseUrl', `${baseUrl}/v1`)
   await next()
-
 })
 
 v1.route('/store', storeRouter)

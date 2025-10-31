@@ -5,7 +5,6 @@ import path from 'node:path';
 import * as JSZip from 'jszip';
 import { prisma } from '@/db.js';
 import { computeChecksum } from '@/utils/checksum.js';
-import { updateTrendingStatus } from '@/utils/trending.js';
 import { getGitHubAvatarUrl } from '@/utils/avatar.js';
 import { fetchGitHubUser, getDisplayName } from '@/utils/github.js';
 import { getExtensionGitHubUrls, buildAssetUrl } from '@/utils/repository.js';
@@ -16,7 +15,6 @@ import { slugify } from '@/utils/slugify.js';
 
 const app = new Hono<AppContext>();
 
-const API_SECRET = process.env.API_SECRET;
 const MAX_UPLOAD_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE || '10485760', 10);
 const DEFAULT_PAGE_SIZE = parseInt(process.env.DEFAULT_PAGE_SIZE || '100', 10);
 
@@ -154,8 +152,7 @@ const packZipFile = (archive: typeof JSZip.default, name: string) => {
 }
 
 app.post('/upload', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || authHeader !== `Bearer ${API_SECRET}`) {
+  if (!c.get('authenticated')) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
@@ -671,29 +668,6 @@ app.get('/list', async (c) => {
     });
   } catch (error) {
     console.error('List extensions error:', error);
-    return c.json(
-      {
-        error: 'Internal server error',
-      },
-      500
-    );
-  }
-});
-
-app.post('/update-trending', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || authHeader !== `Bearer ${API_SECRET}`) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  try {
-    await updateTrendingStatus();
-    return c.json({
-      success: true,
-      message: 'Trending status updated for all extensions',
-    });
-  } catch (error) {
-    console.error('Update trending error:', error);
     return c.json(
       {
         error: 'Internal server error',

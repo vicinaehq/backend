@@ -6,6 +6,7 @@ import { createStorageFromEnv, LocalStorageAdapter } from '@/storage/index.js';
 import { ipMiddleware } from '@/middleware/ip.js';
 import storageRouter from '@/routes/storage.js';
 import v1 from '@/routes/v1/index.js';
+import { authMiddleware } from './middleware/auth';
 
 await prisma.$transaction(
 	VALID_PLATFORMS.map(p => prisma.extensionPlatform.upsert({
@@ -19,7 +20,7 @@ const app = new Hono<AppContext>()
 const storage = createStorageFromEnv();
 
 app.use('*', ipMiddleware());
-
+app.use('*', authMiddleware());
 app.use('*', async (c, next) => {
   c.set('storage', storage)
   await next()

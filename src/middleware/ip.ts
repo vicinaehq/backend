@@ -4,6 +4,7 @@ import type { AppContext } from '@/types/app.js';
 /**
  * Middleware to extract and store the real client IP in context.
  * Checks headers set by reverse proxies (Caddy, Cloudflare, etc.)
+ * IPs are only kept in RAM in order to avoid counting a download twice.
  */
 export const ipMiddleware = (): MiddlewareHandler<AppContext> => {
 	return async (c, next) => {
