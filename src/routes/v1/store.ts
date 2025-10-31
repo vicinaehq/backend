@@ -440,7 +440,6 @@ app.post('/upload', async (c) => {
     return c.json(
       {
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error',
       },
       500
     );
@@ -538,7 +537,6 @@ app.get('/search', async (c) => {
 		return c.json(
 			{
 				error: 'Internal server error',
-				message: error instanceof Error ? error.message : 'Unknown error',
 			},
 			500
 		);
@@ -676,7 +674,6 @@ app.get('/list', async (c) => {
     return c.json(
       {
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error',
       },
       500
     );
@@ -700,7 +697,6 @@ app.post('/update-trending', async (c) => {
     return c.json(
       {
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error',
       },
       500
     );
