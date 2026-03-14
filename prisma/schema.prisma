@@ -82,3 +82,27 @@ model User {
 	githubId String @unique
 	extensions Extension[]
 }
+
+model TelemetrySystemInfo {
+	id              Int      @id @default(autoincrement())
+	userId          String
+	date            DateTime
+	desktops        String   // JSON array
+	vicinaeVersion  String
+	displayProtocol String
+	architecture    String
+	operatingSystem String
+	buildProvenance String
+	locale          String
+	screens         String   // JSON array
+	chassisType     String
+	kernelVersion   String
+	productId       String
+	productVersion  String
+	createdAt       DateTime @default(now())
+	updatedAt       DateTime @updatedAt
+
+	@@unique([userId, date])
+	@@index([date])
+	@@index([vicinaeVersion])
+}

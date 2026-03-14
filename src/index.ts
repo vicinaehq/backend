@@ -7,6 +7,7 @@ import { ipMiddleware } from '@/middleware/ip.js';
 import storageRouter from '@/routes/storage.js';
 import v1 from '@/routes/v1/index.js';
 import { authMiddleware } from './middleware/auth';
+import { rateLimiter } from 'hono-rate-limiter';
 import { logger } from 'hono/logger'
 
 await prisma.$transaction(
@@ -22,6 +23,11 @@ const storage = createStorageFromEnv();
 
 app.use(logger());
 app.use('*', ipMiddleware());
+app.use('*', rateLimiter<AppContext>({
+	windowMs: 60 * 1000,
+	limit: 60,
+	keyGenerator: (c) => c.get('clientIp'),
+}));
 app.use('*', authMiddleware());
 app.use('*', async (c, next) => {
   c.set('storage', storage)

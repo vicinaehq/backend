@@ -2,14 +2,16 @@
   "name": "store",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
-	"start": "NODE_ENV=production bun run src/index.ts",
-	"type-check": "tsc --noEmit",
-	"prisma-deploy": "prisma migrate deploy"
+    "start": "NODE_ENV=production bun run src/index.ts",
+    "type-check": "tsc --noEmit",
+    "prisma-deploy": "prisma migrate deploy"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.7.6",
     "@prisma/client": "^6.18.0",
     "dotenv": "^17.2.3",
     "hono": "^4.10.3",
+    "hono-rate-limiter": "^0.5.3",
     "jszip": "^3.10.1",
     "zod": "^3.24.1"
   },
