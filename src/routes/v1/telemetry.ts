@@ -16,6 +16,11 @@ telemetry.post(
 	}),
 	zValidator('json', systemInfoSchema),
 	async (c) => {
+		const ua = c.req.header('User-Agent') || '';
+		if (!ua.toLowerCase().startsWith('vicinae')) {
+			return c.json({ error: 'Forbidden' }, 403);
+		}
+
 		const data = c.req.valid('json');
 
 		const today = new Date().toISOString().split('T')[0];
