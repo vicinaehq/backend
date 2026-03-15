@@ -80,6 +80,8 @@ admin.get('/telemetry/system-info/stats', async (c) => {
 		versions: Map<string, number>;
 		displayProtocols: Map<string, number>;
 		chassisTypes: Map<string, number>;
+		productIds: Map<string, number>;
+		desktops: Map<string, number>;
 	}>();
 
 	for (const row of rows) {
@@ -92,6 +94,8 @@ admin.get('/telemetry/system-info/stats', async (c) => {
 				versions: new Map(),
 				displayProtocols: new Map(),
 				chassisTypes: new Map(),
+				productIds: new Map(),
+				desktops: new Map(),
 			});
 		}
 		const bucket = buckets.get(key)!;
@@ -101,6 +105,10 @@ admin.get('/telemetry/system-info/stats', async (c) => {
 		bucket.versions.set(row.vicinaeVersion, (bucket.versions.get(row.vicinaeVersion) || 0) + 1);
 		bucket.displayProtocols.set(row.displayProtocol, (bucket.displayProtocols.get(row.displayProtocol) || 0) + 1);
 		bucket.chassisTypes.set(row.chassisType, (bucket.chassisTypes.get(row.chassisType) || 0) + 1);
+		bucket.productIds.set(row.productId, (bucket.productIds.get(row.productId) || 0) + 1);
+		for (const desktop of JSON.parse(row.desktops) as string[]) {
+			bucket.desktops.set(desktop, (bucket.desktops.get(desktop) || 0) + 1);
+		}
 	}
 
 	const data = [...buckets.entries()].map(([period, bucket]) => ({
@@ -111,6 +119,8 @@ admin.get('/telemetry/system-info/stats', async (c) => {
 		versions: Object.fromEntries(bucket.versions),
 		displayProtocols: Object.fromEntries(bucket.displayProtocols),
 		chassisTypes: Object.fromEntries(bucket.chassisTypes),
+		productIds: Object.fromEntries(bucket.productIds),
+		desktops: Object.fromEntries(bucket.desktops),
 	}));
 
 	return c.json({ data, granularity, periods });
