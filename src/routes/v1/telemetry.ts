@@ -12,16 +12,13 @@ telemetry.post('/forget',
 	async (c) => {
 		const data = c.req.valid('json');
 
-		await prisma.telemetrySystemInfo.updateMany({
+		await prisma.telemetrySystemInfo.deleteMany({
 			where: {
 				userId: data.userId
 			},
-			data: {
-				userId: '<redacted>'
-			}
 		});
 
-		return c.json({ message: "All records attached to this vicinae user id, if any, have been fully anonymized." });
+		return c.json({ message: "All records attached to this vicinae user id, if any, have been deleted." });
 	});
 
 telemetry.post(
