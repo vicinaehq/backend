@@ -26,7 +26,7 @@ export const systemInfoSchema = z.object({
 	kernelVersion: z.string().min(1).max(128),
 	productId: z.string().min(1).max(128),
 	productVersion: z.string().min(1).max(128),
-	qtVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+	qtVersion: z.string().regex(/^\d+\.\d+\.\d+$/).optional()
 });
 
 export type SystemInfoPayload = z.infer<typeof systemInfoSchema>;
