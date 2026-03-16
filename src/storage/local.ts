@@ -98,7 +98,10 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   private getFilePath(key: string): string {
-    const normalizedKey = key.replace(/^\/+/, "").replace(/\.\.+/g, "");
+    if (key.includes("..")) {
+      throw new Error("Invalid key: path traversal is not allowed");
+    }
+    const normalizedKey = key.replace(/^\/+/, "");
     return join(this.config.basePath, normalizedKey);
   }
 }
