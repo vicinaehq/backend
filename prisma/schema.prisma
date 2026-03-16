@@ -99,6 +99,7 @@ model TelemetrySystemInfo {
 	kernelVersion   String
 	productId       String
 	productVersion  String
+	qtVersion       String?
 	createdAt       DateTime @default(now())
 	updatedAt       DateTime @updatedAt
 

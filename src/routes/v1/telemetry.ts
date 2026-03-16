@@ -56,6 +56,7 @@ telemetry.post(
 				kernelVersion: data.kernelVersion,
 				productId: data.productId,
 				productVersion: data.productVersion,
+				qtVersion: data.qtVersion,
 			},
 			update: {
 				desktops: JSON.stringify(data.desktops),
@@ -70,6 +71,7 @@ telemetry.post(
 				kernelVersion: data.kernelVersion,
 				productId: data.productId,
 				productVersion: data.productVersion,
+				qtVersion: data.qtVersion,
 			},
 		});
 
