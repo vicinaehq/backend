@@ -8,6 +8,10 @@ const screenSchema = z.object({
 	scale: z.number().positive().max(10),
 });
 
+export const forgetSchema = z.object({
+	userId: z.string().min(1).max(256),
+});
+
 export const systemInfoSchema = z.object({
 	userId: z.string().min(1).max(256),
 	desktops: z.array(z.string().min(1).max(64)).min(1).max(10),

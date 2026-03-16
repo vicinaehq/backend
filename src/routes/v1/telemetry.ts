@@ -3,9 +3,26 @@ import { zValidator } from '@hono/zod-validator';
 import { rateLimiter } from 'hono-rate-limiter';
 import type { AppContext } from '@/types/app.js';
 import { prisma } from '@/db.js';
-import { systemInfoSchema } from '@/schemas/telemetry.js';
+import { systemInfoSchema, forgetSchema } from '@/schemas/telemetry.js';
 
 const telemetry = new Hono<AppContext>();
+
+telemetry.post('/forget',
+	zValidator('json', forgetSchema),
+	async (c) => {
+		const data = c.req.valid('json');
+
+		await prisma.telemetrySystemInfo.updateMany({
+			where: {
+				userId: data.userId
+			},
+			data: {
+				userId: '<redacted>'
+			}
+		});
+
+		return c.json({ message: "All records attached to this vicinae user id, if any, have been fully anonymized." });
+	});
 
 telemetry.post(
 	'/system-info',
@@ -22,7 +39,6 @@ telemetry.post(
 		}
 
 		const data = c.req.valid('json');
-
 		const today = new Date().toISOString().split('T')[0];
 		const date = new Date(`${today}T00:00:00.000Z`);
 
