@@ -152,295 +152,295 @@ const packZipFile = (archive: typeof JSZip.default, name: string) => {
 }
 
 app.post('/upload', async (c) => {
-  if (!c.get('authenticated')) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
+	if (!c.get('authenticated')) {
+		return c.json({ error: 'Unauthorized' }, 401);
+	}
 
-  try {
-    const body = await c.req.parseBody();
-    const file = body['file'];
+	try {
+		const body = await c.req.parseBody();
+		const file = body['file'];
 
-    if (!file || !(file instanceof File)) {
-      return c.json({ error: 'No file uploaded' }, 400);
-    }
+		if (!file || !(file instanceof File)) {
+			return c.json({ error: 'No file uploaded' }, 400);
+		}
 
-    if (file.size > MAX_UPLOAD_SIZE) {
-      return c.json(
-        {
-          error: `File too large. Maximum size is ${MAX_UPLOAD_SIZE} bytes (${Math.round(MAX_UPLOAD_SIZE / 1024 / 1024)}MB)`,
-        },
-        400
-      );
-    }
+		if (file.size > MAX_UPLOAD_SIZE) {
+			return c.json(
+				{
+					error: `File too large. Maximum size is ${MAX_UPLOAD_SIZE} bytes (${Math.round(MAX_UPLOAD_SIZE / 1024 / 1024)}MB)`,
+				},
+				400
+			);
+		}
 
-    if (!file.name.endsWith('.zip') && file.type !== 'application/zip') {
-      return c.json({ error: 'File must be a ZIP archive' }, 400);
-    }
+		if (!file.name.endsWith('.zip') && file.type !== 'application/zip') {
+			return c.json({ error: 'File must be a ZIP archive' }, 400);
+		}
 
-    const arrayBuffer = await file.arrayBuffer();
-    const zip = await JSZip.loadAsync(arrayBuffer);
-    const manifestFile = zip.file('package.json');
+		const arrayBuffer = await file.arrayBuffer();
+		const zip = await JSZip.loadAsync(arrayBuffer);
+		const manifestFile = zip.file('package.json');
 
-    if (!manifestFile) {
-      return c.json({ error: 'Archive must contain package.json at root' }, 400);
-    }
+		if (!manifestFile) {
+			return c.json({ error: 'Archive must contain package.json at root' }, 400);
+		}
 
-    const manifestContent = await manifestFile.async('string');
-    let manifest: any;
-    try {
-      manifest = JSON.parse(manifestContent);
-    } catch (error) {
-      return c.json({ error: 'Invalid JSON in package.json' }, 400);
-    }
+		const manifestContent = await manifestFile.async('string');
+		let manifest: any;
+		try {
+			manifest = JSON.parse(manifestContent);
+		} catch (error) {
+			return c.json({ error: 'Invalid JSON in package.json' }, 400);
+		}
 
-    const validationResult = manifestSchema.safeParse(manifest);
-    if (!validationResult.success) {
-      return c.json(
-        {
-          error: 'Invalid manifest',
-          details: validationResult.error.format(),
-        },
-        400
-      );
-    }
+		const validationResult = manifestSchema.safeParse(manifest);
+		if (!validationResult.success) {
+			return c.json(
+				{
+					error: 'Invalid manifest',
+					details: validationResult.error.format(),
+				},
+				400
+			);
+		}
 
-    const validatedManifest = validationResult.data;
+		const validatedManifest = validationResult.data;
 
-    if (!validatedManifest.dependencies?.['@vicinae/api']) {
-      return c.json(
-        {
-          error: 'Missing required dependency: @vicinae/api must be specified in dependencies',
-        },
-        400
-      );
-    }
+		if (!validatedManifest.dependencies?.['@vicinae/api']) {
+			return c.json(
+				{
+					error: 'Missing required dependency: @vicinae/api must be specified in dependencies',
+				},
+				400
+			);
+		}
 
-    const apiVersion = validatedManifest.dependencies['@vicinae/api'];
-    const authorHandle = validatedManifest.author;
-    const extensionName = validatedManifest.name;
-    const extensionTitle = validatedManifest.title;
-    // Normalize author handle to lowercase for consistent storage paths
-    const extensionKey = `${authorHandle.toLowerCase()}/${extensionName}`;
-    const storageKey = `extensions/${extensionKey}/latest.zip`;
+		const apiVersion = validatedManifest.dependencies['@vicinae/api'];
+		const authorHandle = validatedManifest.author;
+		const extensionName = validatedManifest.name;
+		const extensionTitle = validatedManifest.title;
+		// Normalize author handle to lowercase for consistent storage paths
+		const extensionKey = `${authorHandle.toLowerCase()}/${extensionName}`;
+		const storageKey = `extensions/${extensionKey}/latest.zip`;
 
-    // Compute checksum of the ZIP archive
-    const fileBuffer = Buffer.from(arrayBuffer);
-    const checksum = computeChecksum(fileBuffer);
-    const storage = c.get('storage');
-	const packedZipFile = packZipFile(zip, extensionName);
-	const packed = await packedZipFile.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+		// Compute checksum of the ZIP archive
+		const fileBuffer = Buffer.from(arrayBuffer);
+		const checksum = computeChecksum(fileBuffer);
+		const storage = c.get('storage');
+		const packedZipFile = packZipFile(zip, extensionName);
+		const packed = await packedZipFile.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-    await storage.put(storageKey, packed, {
-      contentType: 'application/zip',
-      contentLength: file.size,
-    });
+		await storage.put(storageKey, packed, {
+			contentType: 'application/zip',
+			contentLength: file.size,
+		});
 
-    const downloadUrl = await storage.getUrl(storageKey);
+		const downloadUrl = await storage.getUrl(storageKey);
 
-    // Fetch GitHub user info to populate name
-    const githubUserInfo = await fetchGitHubUser(authorHandle);
-    const displayName = getDisplayName(githubUserInfo, authorHandle);
+		// Fetch GitHub user info to populate name
+		const githubUserInfo = await fetchGitHubUser(authorHandle);
+		const displayName = getDisplayName(githubUserInfo, authorHandle);
 
-    // Normalize GitHub handle to lowercase for case-insensitive lookups
-    const normalizedHandle = authorHandle.toLowerCase();
+		// Normalize GitHub handle to lowercase for case-insensitive lookups
+		const normalizedHandle = authorHandle.toLowerCase();
 
-    await prisma.gitHubUser.upsert({
-      where: { id: normalizedHandle },
-      create: { id: normalizedHandle },
-      update: {},
-    });
+		await prisma.gitHubUser.upsert({
+			where: { id: normalizedHandle },
+			create: { id: normalizedHandle },
+			update: {},
+		});
 
-    const user = await prisma.user.upsert({
-      where: { githubId: normalizedHandle },
-      create: {
-        githubId: normalizedHandle,
-        name: displayName,
-      },
-      update: {
-        name: displayName, // Update name on each upload in case it changed
-      },
-    });
+		const user = await prisma.user.upsert({
+			where: { githubId: normalizedHandle },
+			create: {
+				githubId: normalizedHandle,
+				name: displayName,
+			},
+			update: {
+				name: displayName, // Update name on each upload in case it changed
+			},
+		});
 
-    const categoryNames = validatedManifest.categories || [];
-    const categoryIds = [];
-    for (const categoryName of categoryNames) {
-      const category = await prisma.extensionCategory.upsert({
-        where: { id: slugify(categoryName) },
-        create: { id: slugify(categoryName), name: categoryName },
-        update: {},
-      });
-      categoryIds.push({ id: category.id });
-    }
+		const categoryNames = validatedManifest.categories || [];
+		const categoryIds = [];
+		for (const categoryName of categoryNames) {
+			const category = await prisma.extensionCategory.upsert({
+				where: { id: slugify(categoryName) },
+				create: { id: slugify(categoryName), name: categoryName },
+				update: {},
+			});
+			categoryIds.push({ id: category.id });
+		}
 
-    const platformIds = [];
-    const platforms = validatedManifest.platforms || ['linux'];
-    for (const platform of platforms) {
-      platformIds.push({ id: platform });
-    }
+		const platformIds = [];
+		const platforms = validatedManifest.platforms || ['linux'];
+		for (const platform of platforms) {
+			platformIds.push({ id: platform });
+		}
 
-    // Parse extension icon to determine light/dark variations
-    const extensionIcon = parseIcon(validatedManifest.icon);
+		// Parse extension icon to determine light/dark variations
+		const extensionIcon = parseIcon(validatedManifest.icon);
 
-    // Extract and store icon files from ZIP
-    let iconLightKey: string | null = null;
-    let iconDarkKey: string | null = null;
+		// Extract and store icon files from ZIP
+		let iconLightKey: string | null = null;
+		let iconDarkKey: string | null = null;
 
-    if (extensionIcon.light) {
-      const iconPath = extensionIcon.light.startsWith('assets/')
-        ? extensionIcon.light
-        : `assets/${extensionIcon.light}`;
-      const iconFile = zip.file(iconPath);
-      if (iconFile) {
-        const iconBuffer = await iconFile.async('nodebuffer');
-        iconLightKey = `extensions/${extensionKey}/${extensionIcon.light}`;
-        await storage.put(iconLightKey, iconBuffer, {
-          contentType: getMimeType(extensionIcon.light),
-        });
-      }
-    }
+		if (extensionIcon.light) {
+			const iconPath = extensionIcon.light.startsWith('assets/')
+				? extensionIcon.light
+				: `assets/${extensionIcon.light}`;
+			const iconFile = zip.file(iconPath);
+			if (iconFile) {
+				const iconBuffer = await iconFile.async('nodebuffer');
+				iconLightKey = `extensions/${extensionKey}/${extensionIcon.light}`;
+				await storage.put(iconLightKey, iconBuffer, {
+					contentType: getMimeType(extensionIcon.light),
+				});
+			}
+		}
 
-    if (extensionIcon.dark) {
-      const iconPath = extensionIcon.dark.startsWith('assets/')
-        ? extensionIcon.dark
-        : `assets/${extensionIcon.dark}`;
-      const iconFile = zip.file(iconPath);
-      if (iconFile) {
-        const iconBuffer = await iconFile.async('nodebuffer');
-        iconDarkKey = `extensions/${extensionKey}/${extensionIcon.dark}`;
-        await storage.put(iconDarkKey, iconBuffer, {
-          contentType: getMimeType(extensionIcon.dark),
-        });
-      }
-    }
+		if (extensionIcon.dark) {
+			const iconPath = extensionIcon.dark.startsWith('assets/')
+				? extensionIcon.dark
+				: `assets/${extensionIcon.dark}`;
+			const iconFile = zip.file(iconPath);
+			if (iconFile) {
+				const iconBuffer = await iconFile.async('nodebuffer');
+				iconDarkKey = `extensions/${extensionKey}/${extensionIcon.dark}`;
+				await storage.put(iconDarkKey, iconBuffer, {
+					contentType: getMimeType(extensionIcon.dark),
+				});
+			}
+		}
 
-    const extension = await prisma.extension.upsert({
-      where: {
-        authorId_name: {
-          authorId: user.id,
-          name: extensionName,
-        },
-      },
-      create: {
-        name: extensionName,
-        title: extensionTitle,
-        description: validatedManifest.description,
-        apiVersion,
-        storageKey,
-        checksum,
-        iconLight: iconLightKey,
-        iconDark: iconDarkKey,
-        authorId: user.id,
-        categories: {
-          connect: categoryIds,
-        },
-        platforms: {
-          connect: platformIds,
-        },
-      },
-      update: {
-        title: extensionTitle,
-        description: validatedManifest.description,
-        apiVersion,
-        storageKey,
-        checksum,
-        iconLight: iconLightKey,
-        iconDark: iconDarkKey,
-        categories: {
-          set: categoryIds,
-        },
-        platforms: {
-          set: platformIds,
-        }
-      },
-    });
+		const extension = await prisma.extension.upsert({
+			where: {
+				authorId_name: {
+					authorId: user.id,
+					name: extensionName,
+				},
+			},
+			create: {
+				name: extensionName,
+				title: extensionTitle,
+				description: validatedManifest.description,
+				apiVersion,
+				storageKey,
+				checksum,
+				iconLight: iconLightKey,
+				iconDark: iconDarkKey,
+				authorId: user.id,
+				categories: {
+					connect: categoryIds,
+				},
+				platforms: {
+					connect: platformIds,
+				},
+			},
+			update: {
+				title: extensionTitle,
+				description: validatedManifest.description,
+				apiVersion,
+				storageKey,
+				checksum,
+				iconLight: iconLightKey,
+				iconDark: iconDarkKey,
+				categories: {
+					set: categoryIds,
+				},
+				platforms: {
+					set: platformIds,
+				}
+			},
+		});
 
-    // Delete existing commands and recreate them (simpler than updating)
-    await prisma.command.deleteMany({
-      where: { extensionId: extension.id },
-    });
+		// Delete existing commands and recreate them (simpler than updating)
+		await prisma.command.deleteMany({
+			where: { extensionId: extension.id },
+		});
 
-    // Create commands from manifest
-    const commands = validatedManifest.commands || [];
-    for (const cmd of commands) {
-      // Parse command icon to determine light/dark variations
-      const commandIcon = parseIcon(cmd.icon);
+		// Create commands from manifest
+		const commands = validatedManifest.commands || [];
+		for (const cmd of commands) {
+			// Parse command icon to determine light/dark variations
+			const commandIcon = parseIcon(cmd.icon);
 
-      // Extract and store command icons
-      let cmdIconLightKey: string | null = null;
-      let cmdIconDarkKey: string | null = null;
+			// Extract and store command icons
+			let cmdIconLightKey: string | null = null;
+			let cmdIconDarkKey: string | null = null;
 
-      if (commandIcon.light) {
-        const iconPath = commandIcon.light.startsWith('assets/')
-          ? commandIcon.light
-          : `assets/${commandIcon.light}`;
-        const iconFile = zip.file(iconPath);
-        if (iconFile) {
-          const iconBuffer = await iconFile.async('nodebuffer');
-          cmdIconLightKey = `extensions/${extensionKey}/${commandIcon.light}`;
-          await storage.put(cmdIconLightKey, iconBuffer, {
-            contentType: getMimeType(commandIcon.light),
-          });
-        }
-      }
+			if (commandIcon.light) {
+				const iconPath = commandIcon.light.startsWith('assets/')
+					? commandIcon.light
+					: `assets/${commandIcon.light}`;
+				const iconFile = zip.file(iconPath);
+				if (iconFile) {
+					const iconBuffer = await iconFile.async('nodebuffer');
+					cmdIconLightKey = `extensions/${extensionKey}/${commandIcon.light}`;
+					await storage.put(cmdIconLightKey, iconBuffer, {
+						contentType: getMimeType(commandIcon.light),
+					});
+				}
+			}
 
-      if (commandIcon.dark) {
-        const iconPath = commandIcon.dark.startsWith('assets/')
-          ? commandIcon.dark
-          : `assets/${commandIcon.dark}`;
-        const iconFile = zip.file(iconPath);
-        if (iconFile) {
-          const iconBuffer = await iconFile.async('nodebuffer');
-          cmdIconDarkKey = `extensions/${extensionKey}/${commandIcon.dark}`;
-          await storage.put(cmdIconDarkKey, iconBuffer, {
-            contentType: getMimeType(commandIcon.dark),
-          });
-        }
-      }
+			if (commandIcon.dark) {
+				const iconPath = commandIcon.dark.startsWith('assets/')
+					? commandIcon.dark
+					: `assets/${commandIcon.dark}`;
+				const iconFile = zip.file(iconPath);
+				if (iconFile) {
+					const iconBuffer = await iconFile.async('nodebuffer');
+					cmdIconDarkKey = `extensions/${extensionKey}/${commandIcon.dark}`;
+					await storage.put(cmdIconDarkKey, iconBuffer, {
+						contentType: getMimeType(commandIcon.dark),
+					});
+				}
+			}
 
-      await prisma.command.create({
-        data: {
-          extensionId: extension.id,
-          name: cmd.name,
-          title: cmd.title,
-          subtitle: cmd.subtitle || null,
-          description: cmd.description || null,
-          keywords: cmd.keywords || [],
-          mode: cmd.mode,
-          disabledByDefault: cmd.disabledByDefault || false,
-          beta: cmd.beta || false,
-          iconLight: cmdIconLightKey,
-          iconDark: cmdIconDarkKey,
-        },
-      });
-    }
+			await prisma.command.create({
+				data: {
+					extensionId: extension.id,
+					name: cmd.name,
+					title: cmd.title,
+					subtitle: cmd.subtitle || null,
+					description: cmd.description || null,
+					keywords: cmd.keywords || [],
+					mode: cmd.mode,
+					disabledByDefault: cmd.disabledByDefault || false,
+					beta: cmd.beta || false,
+					iconLight: cmdIconLightKey,
+					iconDark: cmdIconDarkKey,
+				},
+			});
+		}
 
-    return c.json({
-      success: true,
-      extension: {
-        id: extension.id,
-        key: extensionKey,
-        name: extensionName,
-        title: extensionTitle,
-        author: {
-          handle: authorHandle,
-          name: displayName,
-          avatarUrl: getGitHubAvatarUrl(authorHandle),
-          profileUrl: `https://github.com/${authorHandle}`,
-        },
-        checksum: extension.checksum,
-        downloadUrl,
-        isNew: extension.createdAt.getTime() === extension.updatedAt.getTime(),
-      },
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    return c.json(
-      {
-        error: 'Internal server error',
-      },
-      500
-    );
-  }
+		return c.json({
+			success: true,
+			extension: {
+				id: extension.id,
+				key: extensionKey,
+				name: extensionName,
+				title: extensionTitle,
+				author: {
+					handle: authorHandle,
+					name: displayName,
+					avatarUrl: getGitHubAvatarUrl(authorHandle),
+					profileUrl: `https://github.com/${authorHandle}`,
+				},
+				checksum: extension.checksum,
+				downloadUrl,
+				isNew: extension.createdAt.getTime() === extension.updatedAt.getTime(),
+			},
+		});
+	} catch (error) {
+		console.error('Upload error:', error);
+		return c.json(
+			{
+				error: 'Internal server error',
+			},
+			500
+		);
+	}
 });
 
 app.get('/categories', async (c) => {
@@ -452,7 +452,7 @@ app.get('/categories', async (c) => {
 		}
 	});
 
-	return c.json(categories.map(({id, name, _count}) => ({
+	return c.json(categories.map(({ id, name, _count }) => ({
 		id,
 		name,
 		extensions: _count.extensions
@@ -605,76 +605,80 @@ app.get('/:author/:name/download', async (c) => {
 });
 
 app.get('/list', async (c) => {
-  try {
-    const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
-    const limit = Math.min(
-      200,
-      Math.max(1, parseInt(c.req.query('limit') || String(DEFAULT_PAGE_SIZE), 10))
-    );
-    const category = c.req.query('category');
-    const skip = (page - 1) * limit;
+	try {
+		const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+		/*
+		const limit = Math.min(
+		  200,
+		  Math.max(1, parseInt(c.req.query('limit') || String(DEFAULT_PAGE_SIZE), 10))
+		);
+		*/
 
-    const where: any = {
-      killListedAt: null,
-    };
+		const limit = 500; // FIXME: hardcode limit for now, to avoid changing the client. We want all the extensions in root store search
+		const category = c.req.query('category');
+		const skip = (page - 1) * limit;
 
-    if (category) {
-      where.categories = {
-        some: {
-          id: category,
-        },
-      };
-    }
+		const where: any = {
+			killListedAt: null,
+		};
 
-    const total = await prisma.extension.count({ where });
+		if (category) {
+			where.categories = {
+				some: {
+					id: category,
+				},
+			};
+		}
 
-    const extensions = await prisma.extension.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: {
-        downloadCount: 'desc',
-      },
-      include: {
-        author: {
-          include: {
-            github: true,
-          },
-        },
-        categories: true,
-        platforms: true,
-        commands: true,
-      },
-    });
+		const total = await prisma.extension.count({ where });
 
-    const storage = c.get('storage');
-    const baseUrl = c.get('baseUrl');
+		const extensions = await prisma.extension.findMany({
+			where,
+			skip,
+			take: limit,
+			orderBy: {
+				downloadCount: 'desc',
+			},
+			include: {
+				author: {
+					include: {
+						github: true,
+					},
+				},
+				categories: true,
+				platforms: true,
+				commands: true,
+			},
+		});
 
-    // Use the helper function to format each extension
-    const items = await Promise.all(
-      extensions.map((ext) => formatExtensionResponse(ext, storage, baseUrl))
-    );
+		const storage = c.get('storage');
+		const baseUrl = c.get('baseUrl');
 
-    return c.json({
-      extensions: items,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: page < Math.ceil(total / limit),
-        hasPrev: page > 1,
-      },
-    });
-  } catch (error) {
-    console.error('List extensions error:', error);
-    return c.json(
-      {
-        error: 'Internal server error',
-      },
-      500
-    );
-  }
+		// Use the helper function to format each extension
+		const items = await Promise.all(
+			extensions.map((ext) => formatExtensionResponse(ext, storage, baseUrl))
+		);
+
+		return c.json({
+			extensions: items,
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages: Math.ceil(total / limit),
+				hasNext: page < Math.ceil(total / limit),
+				hasPrev: page > 1,
+			},
+		});
+	} catch (error) {
+		console.error('List extensions error:', error);
+		return c.json(
+			{
+				error: 'Internal server error',
+			},
+			500
+		);
+	}
 });
 
 export default app;
