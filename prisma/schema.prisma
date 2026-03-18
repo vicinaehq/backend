@@ -33,6 +33,7 @@ model Extension {
 	commands Command[]
 	createdAt DateTime @default(now())
 	updatedAt DateTime @updatedAt
+	publishedAt DateTime @default(now())
 	author User? @relation(fields: [authorId], references: [id])
 	authorId String
 	killListedAt DateTime? // to quickly blacklist an extension if for some reason we need to
