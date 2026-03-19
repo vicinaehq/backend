@@ -136,8 +136,7 @@ async function formatExtensionResponse(
 		readmeUrl,
 		downloadUrl,
 		createdAt: extension.createdAt.toISOString(),
-		updatedAt: extension.updatedAt.toISOString(),
-		lastPublishedAt: extension.lastPublishedAt.toISOString(),
+		updatedAt: extension.lastPublishedAt.toISOString(),
 	};
 }
 
