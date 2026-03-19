@@ -15,7 +15,7 @@ CREATE TABLE "new_Extension" (
     "iconDark" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
-    "publishedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastPublishedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "authorId" TEXT NOT NULL,
     "killListedAt" DATETIME,
     CONSTRAINT "Extension_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE

@@ -137,8 +137,7 @@ async function formatExtensionResponse(
 		downloadUrl,
 		createdAt: extension.createdAt.toISOString(),
 		updatedAt: extension.updatedAt.toISOString(),
-		publishedAt: extension.createdAt.toISOString(),
-		lastEditedAt: extension.publishedAt.toISOString(),
+		lastPublishedAt: extension.lastPublishedAt.toISOString(),
 	};
 }
 
@@ -347,7 +346,7 @@ app.post('/upload', async (c) => {
 				checksum,
 				iconLight: iconLightKey,
 				iconDark: iconDarkKey,
-				publishedAt: new Date(),
+				lastPublishedAt: new Date(),
 				categories: {
 					set: categoryIds,
 				},
