@@ -18,18 +18,20 @@ export interface GitHubUserInfo {
  * @param username - GitHub username/handle
  * @returns GitHub user information or null if not found
  */
-export async function fetchGitHubUser(username: string): Promise<GitHubUserInfo | null> {
+export async function fetchGitHubUser(
+	username: string,
+): Promise<GitHubUserInfo | null> {
 	const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 	try {
 		const headers: Record<string, string> = {
-			'Accept': 'application/vnd.github.v3+json',
-			'User-Agent': 'Vicinae-Extension-Store',
+			Accept: "application/vnd.github.v3+json",
+			"User-Agent": "Vicinae-Extension-Store",
 		};
 
 		// Add authorization header if token is available
 		if (GITHUB_TOKEN) {
-			headers['Authorization'] = `Bearer ${GITHUB_TOKEN}`;
+			headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
 		}
 
 		const response = await fetch(`https://api.github.com/users/${username}`, {
@@ -41,7 +43,9 @@ export async function fetchGitHubUser(username: string): Promise<GitHubUserInfo 
 				console.warn(`GitHub user not found: ${username}`);
 				return null;
 			}
-			throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`GitHub API error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -56,7 +60,10 @@ export async function fetchGitHubUser(username: string): Promise<GitHubUserInfo 
  * Extract display name from GitHub user info
  * Falls back to username if name is not set
  */
-export function getDisplayName(userInfo: GitHubUserInfo | null, fallbackUsername: string): string {
+export function getDisplayName(
+	userInfo: GitHubUserInfo | null,
+	fallbackUsername: string,
+): string {
 	if (!userInfo) {
 		return fallbackUsername;
 	}

@@ -1,47 +1,52 @@
-import { Hono } from 'hono'
-import type { AppContext } from '@/types/app.js';
-import { prisma } from '@/db.js';
-import { VALID_PLATFORMS } from '@/constants/platforms.js';
-import { createStorageFromEnv, LocalStorageAdapter } from '@/storage/index.js';
-import { ipMiddleware } from '@/middleware/ip.js';
-import storageRouter from '@/routes/storage.js';
-import v1 from '@/routes/v1/index.js';
-import { authMiddleware } from './middleware/auth';
-import { rateLimiter } from 'hono-rate-limiter';
-import { logger } from 'hono/logger'
+import { Hono } from "hono";
+import type { AppContext } from "@/types/app.js";
+import { prisma } from "@/db.js";
+import { VALID_PLATFORMS } from "@/constants/platforms.js";
+import { createStorageFromEnv, LocalStorageAdapter } from "@/storage/index.js";
+import { ipMiddleware } from "@/middleware/ip.js";
+import storageRouter from "@/routes/storage.js";
+import v1 from "@/routes/v1/index.js";
+import { authMiddleware } from "./middleware/auth";
+import { rateLimiter } from "hono-rate-limiter";
+import { logger } from "hono/logger";
 
 await prisma.$transaction(
-	VALID_PLATFORMS.map(p => prisma.extensionPlatform.upsert({
-		create: { id: p },
-		where: { id: p },
-		update: {}
-	})),
+	VALID_PLATFORMS.map((p) =>
+		prisma.extensionPlatform.upsert({
+			create: { id: p },
+			where: { id: p },
+			update: {},
+		}),
+	),
 );
 
-const app = new Hono<AppContext>()
+const app = new Hono<AppContext>();
 const storage = createStorageFromEnv();
 
 app.use(logger());
-app.use('*', ipMiddleware());
-app.use('*', rateLimiter<AppContext>({
-	windowMs: 60 * 1000,
-	limit: 60,
-	keyGenerator: (c) => c.get('clientIp'),
-}));
-app.use('*', authMiddleware());
-app.use('*', async (c, next) => {
-  c.set('storage', storage)
-  await next()
-})
+app.use("*", ipMiddleware());
+app.use(
+	"*",
+	rateLimiter<AppContext>({
+		windowMs: 60 * 1000,
+		limit: 60,
+		keyGenerator: (c) => c.get("clientIp"),
+	}),
+);
+app.use("*", authMiddleware());
+app.use("*", async (c, next) => {
+	c.set("storage", storage);
+	await next();
+});
 
 if (storage instanceof LocalStorageAdapter) {
-	app.route('/', storageRouter);
+	app.route("/", storageRouter);
 }
 
-app.get('/', (c) => {
-  return c.json({ message: 'Vicinae Backend' })
-})
+app.get("/", (c) => {
+	return c.json({ message: "Vicinae Backend" });
+});
 
-app.route('/v1', v1);
+app.route("/v1", v1);
 
 export default app;

@@ -1,22 +1,22 @@
-import { Hono } from 'hono';
-import type { AppContext } from '@/types/app.js';
-import { prisma } from '@/db.js';
+import { Hono } from "hono";
+import type { AppContext } from "@/types/app.js";
+import { prisma } from "@/db.js";
 
 const admin = new Hono<AppContext>();
 
-admin.use('*', async (c, next) => {
-	if (!c.get('authenticated')) {
-		return c.json({ error: 'Unauthorized' }, 401);
+admin.use("*", async (c, next) => {
+	if (!c.get("authenticated")) {
+		return c.json({ error: "Unauthorized" }, 401);
 	}
 	await next();
 });
 
-admin.get('/telemetry/system-info', async (c) => {
-	const limit = Math.min(Number(c.req.query('limit') || 100), 500);
-	const offset = Number(c.req.query('offset') || 0);
+admin.get("/telemetry/system-info", async (c) => {
+	const limit = Math.min(Number(c.req.query("limit") || 100), 500);
+	const offset = Number(c.req.query("offset") || 0);
 
 	const rows = await prisma.telemetrySystemInfo.findMany({
-		orderBy: { createdAt: 'desc' },
+		orderBy: { createdAt: "desc" },
 		take: limit,
 		skip: offset,
 	});
@@ -32,8 +32,8 @@ admin.get('/telemetry/system-info', async (c) => {
 	});
 });
 
-const GRANULARITIES = ['daily', 'weekly', 'monthly', 'yearly'] as const;
-type Granularity = typeof GRANULARITIES[number];
+const GRANULARITIES = ["daily", "weekly", "monthly", "yearly"] as const;
+type Granularity = (typeof GRANULARITIES)[number];
 
 function mondayOfWeek(date: Date): string {
 	const d = new Date(date);
@@ -46,43 +46,63 @@ function mondayOfWeek(date: Date): string {
 function bucketKey(date: Date, granularity: Granularity): string {
 	const iso = date.toISOString();
 	switch (granularity) {
-		case 'daily': return iso.slice(0, 10);
-		case 'weekly': return mondayOfWeek(date);
-		case 'monthly': return iso.slice(0, 7) + '-01';
-		case 'yearly': return iso.slice(0, 4) + '-01-01';
+		case "daily":
+			return iso.slice(0, 10);
+		case "weekly":
+			return mondayOfWeek(date);
+		case "monthly":
+			return iso.slice(0, 7) + "-01";
+		case "yearly":
+			return iso.slice(0, 4) + "-01-01";
 	}
 }
 
-admin.get('/telemetry/system-info/stats', async (c) => {
-	const granularity = (c.req.query('granularity') || 'daily') as Granularity;
+admin.get("/telemetry/system-info/stats", async (c) => {
+	const granularity = (c.req.query("granularity") || "daily") as Granularity;
 	if (!GRANULARITIES.includes(granularity)) {
-		return c.json({ error: `Invalid granularity. Must be one of: ${GRANULARITIES.join(', ')}` }, 400);
+		return c.json(
+			{
+				error: `Invalid granularity. Must be one of: ${GRANULARITIES.join(", ")}`,
+			},
+			400,
+		);
 	}
 
-	const periods = Math.min(Number(c.req.query('periods') || 30), 365);
+	const periods = Math.min(Number(c.req.query("periods") || 30), 365);
 	const since = new Date();
 	switch (granularity) {
-		case 'daily': since.setDate(since.getDate() - periods); break;
-		case 'weekly': since.setDate(since.getDate() - periods * 7); break;
-		case 'monthly': since.setMonth(since.getMonth() - periods); break;
-		case 'yearly': since.setFullYear(since.getFullYear() - periods); break;
+		case "daily":
+			since.setDate(since.getDate() - periods);
+			break;
+		case "weekly":
+			since.setDate(since.getDate() - periods * 7);
+			break;
+		case "monthly":
+			since.setMonth(since.getMonth() - periods);
+			break;
+		case "yearly":
+			since.setFullYear(since.getFullYear() - periods);
+			break;
 	}
 
 	const rows = await prisma.telemetrySystemInfo.findMany({
 		where: { date: { gte: since } },
-		orderBy: { date: 'desc' },
+		orderBy: { date: "desc" },
 	});
 
-	const buckets = new Map<string, {
-		activeUsers: Set<string>;
-		operatingSystems: Map<string, number>;
-		architectures: Map<string, number>;
-		versions: Map<string, number>;
-		displayProtocols: Map<string, number>;
-		chassisTypes: Map<string, number>;
-		productIds: Map<string, number>;
-		desktops: Map<string, number>;
-	}>();
+	const buckets = new Map<
+		string,
+		{
+			activeUsers: Set<string>;
+			operatingSystems: Map<string, number>;
+			architectures: Map<string, number>;
+			versions: Map<string, number>;
+			displayProtocols: Map<string, number>;
+			chassisTypes: Map<string, number>;
+			productIds: Map<string, number>;
+			desktops: Map<string, number>;
+		}
+	>();
 
 	for (const row of rows) {
 		const key = bucketKey(row.date, granularity);
@@ -100,12 +120,30 @@ admin.get('/telemetry/system-info/stats', async (c) => {
 		}
 		const bucket = buckets.get(key)!;
 		bucket.activeUsers.add(row.userId);
-		bucket.operatingSystems.set(row.operatingSystem, (bucket.operatingSystems.get(row.operatingSystem) || 0) + 1);
-		bucket.architectures.set(row.architecture, (bucket.architectures.get(row.architecture) || 0) + 1);
-		bucket.versions.set(row.vicinaeVersion, (bucket.versions.get(row.vicinaeVersion) || 0) + 1);
-		bucket.displayProtocols.set(row.displayProtocol, (bucket.displayProtocols.get(row.displayProtocol) || 0) + 1);
-		bucket.chassisTypes.set(row.chassisType, (bucket.chassisTypes.get(row.chassisType) || 0) + 1);
-		bucket.productIds.set(row.productId, (bucket.productIds.get(row.productId) || 0) + 1);
+		bucket.operatingSystems.set(
+			row.operatingSystem,
+			(bucket.operatingSystems.get(row.operatingSystem) || 0) + 1,
+		);
+		bucket.architectures.set(
+			row.architecture,
+			(bucket.architectures.get(row.architecture) || 0) + 1,
+		);
+		bucket.versions.set(
+			row.vicinaeVersion,
+			(bucket.versions.get(row.vicinaeVersion) || 0) + 1,
+		);
+		bucket.displayProtocols.set(
+			row.displayProtocol,
+			(bucket.displayProtocols.get(row.displayProtocol) || 0) + 1,
+		);
+		bucket.chassisTypes.set(
+			row.chassisType,
+			(bucket.chassisTypes.get(row.chassisType) || 0) + 1,
+		);
+		bucket.productIds.set(
+			row.productId,
+			(bucket.productIds.get(row.productId) || 0) + 1,
+		);
 		for (const desktop of JSON.parse(row.desktops) as string[]) {
 			bucket.desktops.set(desktop, (bucket.desktops.get(desktop) || 0) + 1);
 		}

@@ -1,22 +1,22 @@
-import { Hono } from 'hono';
-import type { StorageAdapter } from '@/storage/index.js';
-import manifestSchema from '@/schemas/manifest.js';
-import path from 'node:path';
-import * as JSZip from 'jszip';
-import { prisma } from '@/db.js';
-import { computeChecksum } from '@/utils/checksum.js';
-import { getGitHubAvatarUrl } from '@/utils/avatar.js';
-import { fetchGitHubUser, getDisplayName } from '@/utils/github.js';
-import { getExtensionGitHubUrls, buildAssetUrl } from '@/utils/repository.js';
-import { parseIcon } from '@/utils/icons.js';
-import { getMimeType } from '@/utils/mime.js';
-import type { AppContext } from '@/types/app.js';
-import { slugify } from '@/utils/slugify.js';
+import { Hono } from "hono";
+import type { StorageAdapter } from "@/storage/index.js";
+import manifestSchema from "@/schemas/manifest.js";
+import path from "node:path";
+import * as JSZip from "jszip";
+import { prisma } from "@/db.js";
+import { computeChecksum } from "@/utils/checksum.js";
+import { getGitHubAvatarUrl } from "@/utils/avatar.js";
+import { fetchGitHubUser, getDisplayName } from "@/utils/github.js";
+import { getExtensionGitHubUrls, buildAssetUrl } from "@/utils/repository.js";
+import { parseIcon } from "@/utils/icons.js";
+import { getMimeType } from "@/utils/mime.js";
+import type { AppContext } from "@/types/app.js";
+import { slugify } from "@/utils/slugify.js";
 
 const app = new Hono<AppContext>();
 
-const MAX_UPLOAD_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE || '10485760', 10);
-const DEFAULT_PAGE_SIZE = parseInt(process.env.DEFAULT_PAGE_SIZE || '100', 10);
+const MAX_UPLOAD_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE || "10485760", 10);
+const DEFAULT_PAGE_SIZE = parseInt(process.env.DEFAULT_PAGE_SIZE || "100", 10);
 
 /**
  * Helper function to find a user by GitHub handle (case-insensitive)
@@ -38,7 +38,10 @@ async function findUserByGitHubHandle(handle: string) {
 /**
  * Helper function to find an extension by author handle and name
  */
-async function findExtensionByAuthorAndName(authorHandle: string, extensionName: string) {
+async function findExtensionByAuthorAndName(
+	authorHandle: string,
+	extensionName: string,
+) {
 	const user = await findUserByGitHubHandle(authorHandle);
 	if (!user) {
 		return null;
@@ -70,25 +73,33 @@ async function findExtensionByAuthorAndName(authorHandle: string, extensionName:
 async function formatExtensionResponse(
 	extension: Awaited<ReturnType<typeof findExtensionByAuthorAndName>>,
 	storage: StorageAdapter,
-	baseUrl: string
+	baseUrl: string,
 ) {
 	if (!extension) {
 		return null;
 	}
 
-	const authorHandle = extension.author?.github?.id || 'unknown';
+	const authorHandle = extension.author?.github?.id || "unknown";
 	const authorName = extension.author?.name || authorHandle;
 	const { sourceUrl, readmeUrl } = getExtensionGitHubUrls(extension.name);
 
 	// Get storage URLs for icons and README
-	const iconLightUrl = extension.iconLight ? await storage.getUrl(extension.iconLight) : null;
-	const iconDarkUrl = extension.iconDark ? await storage.getUrl(extension.iconDark) : null;
+	const iconLightUrl = extension.iconLight
+		? await storage.getUrl(extension.iconLight)
+		: null;
+	const iconDarkUrl = extension.iconDark
+		? await storage.getUrl(extension.iconDark)
+		: null;
 
 	// Get command icon URLs
 	const commandsWithIcons = await Promise.all(
 		extension.commands.map(async (cmd) => {
-			const cmdIconLight = cmd.iconLight ? await storage.getUrl(cmd.iconLight) : null;
-			const cmdIconDark = cmd.iconDark ? await storage.getUrl(cmd.iconDark) : null;
+			const cmdIconLight = cmd.iconLight
+				? await storage.getUrl(cmd.iconLight)
+				: null;
+			const cmdIconDark = cmd.iconDark
+				? await storage.getUrl(cmd.iconDark)
+				: null;
 
 			return {
 				id: cmd.id,
@@ -105,7 +116,7 @@ async function formatExtensionResponse(
 					dark: cmdIconDark,
 				},
 			};
-		})
+		}),
 	);
 
 	const downloadUrl = `${baseUrl}/store/${authorHandle.toLowerCase()}/${extension.name}/download`;
@@ -141,27 +152,27 @@ async function formatExtensionResponse(
 }
 
 const packZipFile = (archive: typeof JSZip.default, name: string) => {
-	const zip = new JSZip.default;
-	archive.forEach((file => {
+	const zip = new JSZip.default();
+	archive.forEach((file) => {
 		const f = archive.file(file);
 		if (f) {
-			zip.file(path.join(name, file), f.async('nodebuffer'));
+			zip.file(path.join(name, file), f.async("nodebuffer"));
 		}
-	}));
+	});
 	return zip;
-}
+};
 
-app.post('/upload', async (c) => {
-	if (!c.get('authenticated')) {
-		return c.json({ error: 'Unauthorized' }, 401);
+app.post("/upload", async (c) => {
+	if (!c.get("authenticated")) {
+		return c.json({ error: "Unauthorized" }, 401);
 	}
 
 	try {
 		const body = await c.req.parseBody();
-		const file = body['file'];
+		const file = body["file"];
 
 		if (!file || !(file instanceof File)) {
-			return c.json({ error: 'No file uploaded' }, 400);
+			return c.json({ error: "No file uploaded" }, 400);
 		}
 
 		if (file.size > MAX_UPLOAD_SIZE) {
@@ -169,53 +180,57 @@ app.post('/upload', async (c) => {
 				{
 					error: `File too large. Maximum size is ${MAX_UPLOAD_SIZE} bytes (${Math.round(MAX_UPLOAD_SIZE / 1024 / 1024)}MB)`,
 				},
-				400
+				400,
 			);
 		}
 
-		if (!file.name.endsWith('.zip') && file.type !== 'application/zip') {
-			return c.json({ error: 'File must be a ZIP archive' }, 400);
+		if (!file.name.endsWith(".zip") && file.type !== "application/zip") {
+			return c.json({ error: "File must be a ZIP archive" }, 400);
 		}
 
 		const arrayBuffer = await file.arrayBuffer();
 		const zip = await JSZip.loadAsync(arrayBuffer);
-		const manifestFile = zip.file('package.json');
+		const manifestFile = zip.file("package.json");
 
 		if (!manifestFile) {
-			return c.json({ error: 'Archive must contain package.json at root' }, 400);
+			return c.json(
+				{ error: "Archive must contain package.json at root" },
+				400,
+			);
 		}
 
-		const manifestContent = await manifestFile.async('string');
+		const manifestContent = await manifestFile.async("string");
 		let manifest: any;
 		try {
 			manifest = JSON.parse(manifestContent);
 		} catch (error) {
-			return c.json({ error: 'Invalid JSON in package.json' }, 400);
+			return c.json({ error: "Invalid JSON in package.json" }, 400);
 		}
 
 		const validationResult = manifestSchema.safeParse(manifest);
 		if (!validationResult.success) {
 			return c.json(
 				{
-					error: 'Invalid manifest',
+					error: "Invalid manifest",
 					details: validationResult.error.format(),
 				},
-				400
+				400,
 			);
 		}
 
 		const validatedManifest = validationResult.data;
 
-		if (!validatedManifest.dependencies?.['@vicinae/api']) {
+		if (!validatedManifest.dependencies?.["@vicinae/api"]) {
 			return c.json(
 				{
-					error: 'Missing required dependency: @vicinae/api must be specified in dependencies',
+					error:
+						"Missing required dependency: @vicinae/api must be specified in dependencies",
 				},
-				400
+				400,
 			);
 		}
 
-		const apiVersion = validatedManifest.dependencies['@vicinae/api'];
+		const apiVersion = validatedManifest.dependencies["@vicinae/api"];
 		const authorHandle = validatedManifest.author;
 		const extensionName = validatedManifest.name;
 		const extensionTitle = validatedManifest.title;
@@ -226,12 +241,15 @@ app.post('/upload', async (c) => {
 		// Compute checksum of the ZIP archive
 		const fileBuffer = Buffer.from(arrayBuffer);
 		const checksum = computeChecksum(fileBuffer);
-		const storage = c.get('storage');
+		const storage = c.get("storage");
 		const packedZipFile = packZipFile(zip, extensionName);
-		const packed = await packedZipFile.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+		const packed = await packedZipFile.generateAsync({
+			type: "nodebuffer",
+			compression: "DEFLATE",
+		});
 
 		await storage.put(storageKey, packed, {
-			contentType: 'application/zip',
+			contentType: "application/zip",
 			contentLength: file.size,
 		});
 
@@ -273,7 +291,7 @@ app.post('/upload', async (c) => {
 		}
 
 		const platformIds = [];
-		const platforms = validatedManifest.platforms || ['linux'];
+		const platforms = validatedManifest.platforms || ["linux"];
 		for (const platform of platforms) {
 			platformIds.push({ id: platform });
 		}
@@ -286,12 +304,12 @@ app.post('/upload', async (c) => {
 		let iconDarkKey: string | null = null;
 
 		if (extensionIcon.light) {
-			const iconPath = extensionIcon.light.startsWith('assets/')
+			const iconPath = extensionIcon.light.startsWith("assets/")
 				? extensionIcon.light
 				: `assets/${extensionIcon.light}`;
 			const iconFile = zip.file(iconPath);
 			if (iconFile) {
-				const iconBuffer = await iconFile.async('nodebuffer');
+				const iconBuffer = await iconFile.async("nodebuffer");
 				iconLightKey = `extensions/${extensionKey}/${extensionIcon.light}`;
 				await storage.put(iconLightKey, iconBuffer, {
 					contentType: getMimeType(extensionIcon.light),
@@ -300,12 +318,12 @@ app.post('/upload', async (c) => {
 		}
 
 		if (extensionIcon.dark) {
-			const iconPath = extensionIcon.dark.startsWith('assets/')
+			const iconPath = extensionIcon.dark.startsWith("assets/")
 				? extensionIcon.dark
 				: `assets/${extensionIcon.dark}`;
 			const iconFile = zip.file(iconPath);
 			if (iconFile) {
-				const iconBuffer = await iconFile.async('nodebuffer');
+				const iconBuffer = await iconFile.async("nodebuffer");
 				iconDarkKey = `extensions/${extensionKey}/${extensionIcon.dark}`;
 				await storage.put(iconDarkKey, iconBuffer, {
 					contentType: getMimeType(extensionIcon.dark),
@@ -350,7 +368,7 @@ app.post('/upload', async (c) => {
 				},
 				platforms: {
 					set: platformIds,
-				}
+				},
 			},
 		});
 
@@ -370,12 +388,12 @@ app.post('/upload', async (c) => {
 			let cmdIconDarkKey: string | null = null;
 
 			if (commandIcon.light) {
-				const iconPath = commandIcon.light.startsWith('assets/')
+				const iconPath = commandIcon.light.startsWith("assets/")
 					? commandIcon.light
 					: `assets/${commandIcon.light}`;
 				const iconFile = zip.file(iconPath);
 				if (iconFile) {
-					const iconBuffer = await iconFile.async('nodebuffer');
+					const iconBuffer = await iconFile.async("nodebuffer");
 					cmdIconLightKey = `extensions/${extensionKey}/${commandIcon.light}`;
 					await storage.put(cmdIconLightKey, iconBuffer, {
 						contentType: getMimeType(commandIcon.light),
@@ -384,12 +402,12 @@ app.post('/upload', async (c) => {
 			}
 
 			if (commandIcon.dark) {
-				const iconPath = commandIcon.dark.startsWith('assets/')
+				const iconPath = commandIcon.dark.startsWith("assets/")
 					? commandIcon.dark
 					: `assets/${commandIcon.dark}`;
 				const iconFile = zip.file(iconPath);
 				if (iconFile) {
-					const iconBuffer = await iconFile.async('nodebuffer');
+					const iconBuffer = await iconFile.async("nodebuffer");
 					cmdIconDarkKey = `extensions/${extensionKey}/${commandIcon.dark}`;
 					await storage.put(cmdIconDarkKey, iconBuffer, {
 						contentType: getMimeType(commandIcon.dark),
@@ -433,49 +451,54 @@ app.post('/upload', async (c) => {
 			},
 		});
 	} catch (error) {
-		console.error('Upload error:', error);
+		console.error("Upload error:", error);
 		return c.json(
 			{
-				error: 'Internal server error',
+				error: "Internal server error",
 			},
-			500
+			500,
 		);
 	}
 });
 
-app.get('/categories', async (c) => {
+app.get("/categories", async (c) => {
 	const categories = await prisma.extensionCategory.findMany({
 		select: {
 			id: true,
 			name: true,
 			_count: { select: { extensions: true } },
-		}
+		},
 	});
 
-	return c.json(categories.map(({ id, name, _count }) => ({
-		id,
-		name,
-		extensions: _count.extensions
-	})));
+	return c.json(
+		categories.map(({ id, name, _count }) => ({
+			id,
+			name,
+			extensions: _count.extensions,
+		})),
+	);
 });
 
-app.get('/search', async (c) => {
+app.get("/search", async (c) => {
 	try {
-		const query = c.req.query('q');
-		const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+		const query = c.req.query("q");
+		const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
 		const limit = Math.min(
 			200,
-			Math.max(1, parseInt(c.req.query('limit') || String(DEFAULT_PAGE_SIZE), 10))
+			Math.max(
+				1,
+				parseInt(c.req.query("limit") || String(DEFAULT_PAGE_SIZE), 10),
+			),
 		);
 		const skip = (page - 1) * limit;
 
 		if (!query || query.trim().length === 0) {
-			return c.json({ error: 'Search query is required' }, 400);
+			return c.json({ error: "Search query is required" }, 400);
 		}
 
 		const searchTerm = query.trim().toLowerCase();
-		const storage = c.get('storage');
-		const baseUrl = c.get('baseUrl');
+		const storage = c.get("storage");
+		const baseUrl = c.get("baseUrl");
 
 		// Search extensions by name, title, or description
 		const where: any = {
@@ -498,7 +521,7 @@ app.get('/search', async (c) => {
 			skip,
 			take: limit,
 			orderBy: {
-				downloadCount: 'desc',
+				downloadCount: "desc",
 			},
 			include: {
 				author: {
@@ -514,7 +537,7 @@ app.get('/search', async (c) => {
 
 		// Format the extensions
 		const items = await Promise.all(
-			extensions.map((ext) => formatExtensionResponse(ext, storage, baseUrl))
+			extensions.map((ext) => formatExtensionResponse(ext, storage, baseUrl)),
 		);
 
 		return c.json({
@@ -530,12 +553,12 @@ app.get('/search', async (c) => {
 			},
 		});
 	} catch (error) {
-		console.error('Search extensions error:', error);
+		console.error("Search extensions error:", error);
 		return c.json(
 			{
-				error: 'Internal server error',
+				error: "Internal server error",
 			},
-			500
+			500,
 		);
 	}
 });
@@ -544,16 +567,16 @@ app.get('/search', async (c) => {
 const downloadIpMap = new Map<string, Set<string>>();
 
 // Get detailed information about a specific extension
-app.get('/:author/:name', async (c) => {
-	const author = c.req.param('author');
-	const name = c.req.param('name');
+app.get("/:author/:name", async (c) => {
+	const author = c.req.param("author");
+	const name = c.req.param("name");
 	const storage = c.var.storage;
 	const baseUrl = c.var.baseUrl;
 
 	const extension = await findExtensionByAuthorAndName(author, name);
 
 	if (!extension) {
-		return c.json({ error: 'Extension not found' }, 404);
+		return c.json({ error: "Extension not found" }, 404);
 	}
 
 	const formatted = await formatExtensionResponse(extension, storage, baseUrl);
@@ -563,16 +586,16 @@ app.get('/:author/:name', async (c) => {
 // Download zip archive and count download
 // We use an in-memory IP map to not duplicate downloads for the same IP per extension.
 // GitHub usernames are case-insensitive, so we normalize to lowercase for lookups
-app.get('/:author/:name/download', async (c) => {
-	const author = c.req.param('author').toLowerCase(); // Normalize to lowercase
-	const name = c.req.param('name');
+app.get("/:author/:name/download", async (c) => {
+	const author = c.req.param("author").toLowerCase(); // Normalize to lowercase
+	const name = c.req.param("name");
 	const storage = c.var.storage;
 	const clientIp = c.var.clientIp;
 
 	const extension = await findExtensionByAuthorAndName(author, name);
 
 	if (!extension) {
-		return c.json({ error: 'Extension not found' }, 404);
+		return c.json({ error: "Extension not found" }, 404);
 	}
 
 	const file = await storage.get(extension.storageKey);
@@ -598,15 +621,15 @@ app.get('/:author/:name/download', async (c) => {
 
 	return new Response(file, {
 		headers: {
-			'Content-Type': 'application/zip',
-			'Content-Disposition': `attachment; filename="${name}-latest.zip"`,
+			"Content-Type": "application/zip",
+			"Content-Disposition": `attachment; filename="${name}-latest.zip"`,
 		},
 	});
 });
 
-app.get('/list', async (c) => {
+app.get("/list", async (c) => {
 	try {
-		const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+		const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
 		/*
 		const limit = Math.min(
 		  200,
@@ -615,7 +638,7 @@ app.get('/list', async (c) => {
 		*/
 
 		const limit = 500; // FIXME: hardcode limit for now, to avoid changing the client. We want all the extensions in root store search
-		const category = c.req.query('category');
+		const category = c.req.query("category");
 		const skip = (page - 1) * limit;
 
 		const where: any = {
@@ -637,7 +660,7 @@ app.get('/list', async (c) => {
 			skip,
 			take: limit,
 			orderBy: {
-				downloadCount: 'desc',
+				downloadCount: "desc",
 			},
 			include: {
 				author: {
@@ -651,12 +674,12 @@ app.get('/list', async (c) => {
 			},
 		});
 
-		const storage = c.get('storage');
-		const baseUrl = c.get('baseUrl');
+		const storage = c.get("storage");
+		const baseUrl = c.get("baseUrl");
 
 		// Use the helper function to format each extension
 		const items = await Promise.all(
-			extensions.map((ext) => formatExtensionResponse(ext, storage, baseUrl))
+			extensions.map((ext) => formatExtensionResponse(ext, storage, baseUrl)),
 		);
 
 		return c.json({
@@ -671,12 +694,12 @@ app.get('/list', async (c) => {
 			},
 		});
 	} catch (error) {
-		console.error('List extensions error:', error);
+		console.error("List extensions error:", error);
 		return c.json(
 			{
-				error: 'Internal server error',
+				error: "Internal server error",
 			},
-			500
+			500,
 		);
 	}
 });

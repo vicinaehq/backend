@@ -11,8 +11,8 @@
  */
 
 export interface IconVariations {
-  light: string | null;
-  dark: string | null;
+	light: string | null;
+	dark: string | null;
 }
 
 /**
@@ -21,22 +21,22 @@ export interface IconVariations {
  * @returns Object with light and dark variations
  */
 export function parseIcon(icon: string | null | undefined): IconVariations {
-  if (!icon) {
-    return { light: null, dark: null };
-  }
+	if (!icon) {
+		return { light: null, dark: null };
+	}
 
-  // Check if icon has @dark suffix
-  if (icon.includes('@dark')) {
-    return { light: null, dark: icon };
-  }
+	// Check if icon has @dark suffix
+	if (icon.includes("@dark")) {
+		return { light: null, dark: icon };
+	}
 
-  // Check if icon has @light suffix
-  if (icon.includes('@light')) {
-    return { light: icon, dark: null };
-  }
+	// Check if icon has @light suffix
+	if (icon.includes("@light")) {
+		return { light: icon, dark: null };
+	}
 
-  // No theme suffix - use for both light and dark
-  return { light: icon, dark: icon };
+	// No theme suffix - use for both light and dark
+	return { light: icon, dark: icon };
 }
 
 /**
@@ -46,18 +46,20 @@ export function parseIcon(icon: string | null | undefined): IconVariations {
  * @param icons - Array of icon strings to merge
  * @returns Merged light and dark variations
  */
-export function mergeIconVariations(icons: (string | null | undefined)[]): IconVariations {
-  const result: IconVariations = { light: null, dark: null };
+export function mergeIconVariations(
+	icons: (string | null | undefined)[],
+): IconVariations {
+	const result: IconVariations = { light: null, dark: null };
 
-  for (const icon of icons) {
-    const parsed = parseIcon(icon);
-    if (parsed.light && !result.light) {
-      result.light = parsed.light;
-    }
-    if (parsed.dark && !result.dark) {
-      result.dark = parsed.dark;
-    }
-  }
+	for (const icon of icons) {
+		const parsed = parseIcon(icon);
+		if (parsed.light && !result.light) {
+			result.light = parsed.light;
+		}
+		if (parsed.dark && !result.dark) {
+			result.dark = parsed.dark;
+		}
+	}
 
-  return result;
+	return result;
 }

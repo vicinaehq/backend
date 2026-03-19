@@ -1,31 +1,30 @@
-import { Hono } from 'hono';
-import { createStorageFromEnv, LocalStorageAdapter } from '@/storage/index.js';
-import type { AppContext } from '@/types/app.js';
-import storeRouter from './store.js'
-import raycast from './raycast.js';
-import telemetry from './telemetry.js';
-import admin from './admin.js';
-import localStorageRouter from '@/routes/storage.js'
+import { Hono } from "hono";
+import { createStorageFromEnv, LocalStorageAdapter } from "@/storage/index.js";
+import type { AppContext } from "@/types/app.js";
+import storeRouter from "./store.js";
+import raycast from "./raycast.js";
+import telemetry from "./telemetry.js";
+import admin from "./admin.js";
+import localStorageRouter from "@/routes/storage.js";
 
 const storage = createStorageFromEnv();
-const baseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
+const baseUrl = process.env.API_BASE_URL || "http://localhost:3000";
 
-const v1 = new Hono<AppContext>()
+const v1 = new Hono<AppContext>();
 
 // Inject shared context variables
-v1.use('*', async (c, next) => {
-	c.set('baseUrl', `${baseUrl}/v1`)
-	await next()
-})
+v1.use("*", async (c, next) => {
+	c.set("baseUrl", `${baseUrl}/v1`);
+	await next();
+});
 
-v1.route('/store', storeRouter)
-v1.route('/raycast', raycast)
-v1.route('/telemetry', telemetry)
-v1.route('/admin', admin)
+v1.route("/store", storeRouter);
+v1.route("/raycast", raycast);
+v1.route("/telemetry", telemetry);
+v1.route("/admin", admin);
 
 if (storage instanceof LocalStorageAdapter) {
-	v1.route('/', localStorageRouter);
+	v1.route("/", localStorageRouter);
 }
 
 export default v1;
-
