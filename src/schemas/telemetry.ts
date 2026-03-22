@@ -2,10 +2,10 @@ import { z } from "zod";
 
 const screenSchema = z.object({
 	resolution: z.object({
-		width: z.number().int().positive().max(32768),
-		height: z.number().int().positive().max(32768),
+		width: z.number(),
+		height: z.number(),
 	}),
-	scale: z.number().positive().max(10),
+	scale: z.number(),
 });
 
 export const forgetSchema = z.object({
