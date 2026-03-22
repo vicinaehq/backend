@@ -29,7 +29,13 @@ telemetry.post(
 		limit: 10,
 		keyGenerator: (c) => c.get("clientIp"),
 	}),
-	zValidator("json", systemInfoSchema),
+	zValidator("json", systemInfoSchema, (result, c) => {
+		if ("error" in result && result.error) {
+			const flat = result.error.flatten();
+			console.warn("[telemetry] validation error:", JSON.stringify(flat));
+			return c.json({ error: "Validation failed", details: flat }, 400);
+		}
+	}),
 	async (c) => {
 		const ua = c.req.header("User-Agent") || "";
 		if (!ua.toLowerCase().startsWith("vicinae")) {
