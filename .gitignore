@@ -12,6 +12,8 @@ node_modules/
 # Database
 *.db
 *.db-journal
+*.duckdb
+*.duckdb.wal
 
 # Build output
 dist/

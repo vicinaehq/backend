@@ -9,6 +9,7 @@ import v1 from "@/routes/v1/index.js";
 import { authMiddleware } from "./middleware/auth";
 import { rateLimiter } from "hono-rate-limiter";
 import { logger } from "hono/logger";
+import { initAnalytics } from "@/analytics.js";
 
 await prisma.$transaction(
 	VALID_PLATFORMS.map((p) =>
@@ -19,6 +20,8 @@ await prisma.$transaction(
 		}),
 	),
 );
+
+await initAnalytics();
 
 const app = new Hono<AppContext>();
 const storage = createStorageFromEnv();

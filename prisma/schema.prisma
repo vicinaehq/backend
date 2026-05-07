@@ -108,3 +108,4 @@ model TelemetrySystemInfo {
 	@@index([date])
 	@@index([vicinaeVersion])
 }
+

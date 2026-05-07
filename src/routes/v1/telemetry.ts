@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { rateLimiter } from "hono-rate-limiter";
 import type { AppContext } from "@/types/app.js";
-import { prisma } from "@/db.js";
+import { upsertSystemInfo, deleteUserData } from "@/analytics.js";
 import { systemInfoSchema, forgetSchema } from "@/schemas/telemetry.js";
 
 const telemetry = new Hono<AppContext>();
@@ -10,11 +10,7 @@ const telemetry = new Hono<AppContext>();
 telemetry.post("/forget", zValidator("json", forgetSchema), async (c) => {
 	const data = c.req.valid("json");
 
-	await prisma.telemetrySystemInfo.deleteMany({
-		where: {
-			userId: data.userId,
-		},
-	});
+	await deleteUserData(data.userId);
 
 	return c.json({
 		message:
@@ -46,41 +42,7 @@ telemetry.post(
 		const today = new Date().toISOString().split("T")[0];
 		const date = new Date(`${today}T00:00:00.000Z`);
 
-		await prisma.telemetrySystemInfo.upsert({
-			where: { userId_date: { userId: data.userId, date } },
-			create: {
-				userId: data.userId,
-				date,
-				desktops: JSON.stringify(data.desktops),
-				vicinaeVersion: data.vicinaeVersion,
-				displayProtocol: data.displayProtocol,
-				architecture: data.architecture,
-				operatingSystem: data.operatingSystem,
-				buildProvenance: data.buildProvenance,
-				locale: data.locale,
-				screens: JSON.stringify(data.screens),
-				chassisType: data.chassisType,
-				kernelVersion: data.kernelVersion,
-				productId: data.productId,
-				productVersion: data.productVersion,
-				qtVersion: data.qtVersion,
-			},
-			update: {
-				desktops: JSON.stringify(data.desktops),
-				vicinaeVersion: data.vicinaeVersion,
-				displayProtocol: data.displayProtocol,
-				architecture: data.architecture,
-				operatingSystem: data.operatingSystem,
-				buildProvenance: data.buildProvenance,
-				locale: data.locale,
-				screens: JSON.stringify(data.screens),
-				chassisType: data.chassisType,
-				kernelVersion: data.kernelVersion,
-				productId: data.productId,
-				productVersion: data.productVersion,
-				qtVersion: data.qtVersion,
-			},
-		});
+		await upsertSystemInfo({ ...data, date });
 
 		return c.json({ message: "ok" });
 	},

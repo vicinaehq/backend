@@ -31,10 +31,12 @@ RUN apk add --no-cache sqlite
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
 COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/package.json ./package.json
 
-# Create storage directory
-RUN mkdir -p /app/storage
+# Create storage and analytics data directories
+RUN mkdir -p /app/storage /app/data
+ENV ANALYTICS_DB_PATH=/app/data/analytics.duckdb
 
 # Expose port
 EXPOSE 3000
