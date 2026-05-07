@@ -205,6 +205,9 @@ const DIMENSION_COLUMNS = [
 	{ key: "displayProtocols", column: "display_protocol" },
 	{ key: "chassisTypes", column: "chassis_type" },
 	{ key: "productIds", column: "product_id" },
+	{ key: "locales", column: "locale" },
+	{ key: "buildProvenances", column: "build_provenance" },
+	{ key: "kernelVersions", column: "kernel_version" },
 ] as const;
 
 async function breakdownByColumn(
@@ -221,6 +224,44 @@ async function breakdownByColumn(
 			COUNT(DISTINCT user_id) AS count
 		FROM telemetry_system_info
 		WHERE ${where}
+		GROUP BY period, value
+		ORDER BY period DESC`,
+		params,
+	);
+	const result = new Map<string, Record<string, number>>();
+	for (const row of reader.getRowObjects()) {
+		const period = String(row.period);
+		if (!result.has(period)) result.set(period, {});
+		result.get(period)![String(row.value)] = Number(row.count);
+	}
+	return result;
+}
+
+async function breakdownByScreenBucket(
+	conn: ReturnType<typeof getConnection>,
+	trunc: string,
+	where: string,
+	params: Record<string, DuckDBValue>,
+): Promise<Map<string, Record<string, number>>> {
+	const reader = await conn.runAndReadAll(
+		`SELECT
+			date_trunc('${trunc}', date)::DATE AS period,
+			CASE
+				WHEN max_height <= 720 THEN '720p'
+				WHEN max_height <= 1080 THEN '1080p'
+				WHEN max_height <= 1440 THEN '1440p'
+				WHEN max_height <= 2160 THEN '4K'
+				ELSE '5K+'
+			END AS value,
+			COUNT(DISTINCT user_id) AS count
+		FROM (
+			SELECT date, user_id,
+				MAX(CAST(json_extract(s, '$.resolution.height') AS INT)) AS max_height
+			FROM telemetry_system_info,
+				LATERAL UNNEST(from_json(screens, '["json"]')) AS t(s)
+			WHERE ${where}
+			GROUP BY date, user_id
+		)
 		GROUP BY period, value
 		ORDER BY period DESC`,
 		params,
@@ -287,6 +328,7 @@ async function queryBreakdowns(
 		),
 	);
 	const desktops = await breakdownByDesktop(conn, trunc, where, params);
+	const screenBuckets = await breakdownByScreenBucket(conn, trunc, where, params);
 
 	return dauReader.getRowObjects().map((row) => {
 		const period = String(row.period);
@@ -295,6 +337,7 @@ async function queryBreakdowns(
 			breakdowns[DIMENSION_COLUMNS[i].key] = dimensions[i].get(period) ?? {};
 		}
 		breakdowns.desktops = desktops.get(period) ?? {};
+		breakdowns.screenBuckets = screenBuckets.get(period) ?? {};
 
 		return {
 			period,
