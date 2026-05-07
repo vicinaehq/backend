@@ -1,5 +1,6 @@
 import { DuckDBInstance, type DuckDBValue } from "@duckdb/node-api";
 import type { SystemInfoPayload } from "@/schemas/telemetry.js";
+import { prisma } from "@/db.js";
 
 const DB_PATH = process.env.ANALYTICS_DB_PATH || "./analytics.duckdb";
 
@@ -101,6 +102,40 @@ export async function upsertSystemInfo(
 			16: now,
 		},
 	);
+}
+
+export async function migrateFromSqlite() {
+	const rows = await prisma.telemetrySystemInfo.findMany();
+	if (rows.length === 0) {
+		return { migrated: 0, message: "No rows to migrate." };
+	}
+
+	let migrated = 0;
+	for (const row of rows) {
+		const desktops = JSON.parse(row.desktops) as string[];
+		const screens = JSON.parse(row.screens);
+
+		await upsertSystemInfo({
+			userId: row.userId,
+			date: row.date,
+			desktops,
+			vicinaeVersion: row.vicinaeVersion,
+			displayProtocol: row.displayProtocol,
+			architecture: row.architecture,
+			operatingSystem: row.operatingSystem,
+			buildProvenance: row.buildProvenance,
+			locale: row.locale,
+			screens,
+			chassisType: row.chassisType,
+			kernelVersion: row.kernelVersion,
+			productId: row.productId,
+			productVersion: row.productVersion,
+			qtVersion: row.qtVersion ?? undefined,
+		});
+		migrated++;
+	}
+
+	return { migrated, message: `Migrated ${migrated} rows from SQLite to DuckDB.` };
 }
 
 export async function deleteUserData(userId: string) {

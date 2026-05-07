@@ -4,6 +4,7 @@ import {
 	queryRawRows,
 	queryStats,
 	queryAnalytics,
+	migrateFromSqlite,
 	VALID_GRANULARITIES,
 	ALLOWED_FILTERS,
 	type Granularity,
@@ -69,6 +70,11 @@ admin.get("/analytics", async (c) => {
 	const data = await queryAnalytics(granularity, periods, filters);
 
 	return c.json({ data, filters, granularity, periods });
+});
+
+admin.post("/telemetry/migrate", async (c) => {
+	const result = await migrateFromSqlite();
+	return c.json(result);
 });
 
 export default admin;
