@@ -1,4 +1,4 @@
-import { DuckDBInstance } from "@duckdb/node-api";
+import { DuckDBInstance, type DuckDBValue } from "@duckdb/node-api";
 import type { SystemInfoPayload } from "@/schemas/telemetry.js";
 
 const DB_PATH = process.env.ANALYTICS_DB_PATH || "./analytics.duckdb";
@@ -165,7 +165,7 @@ async function breakdownByColumn(
 	trunc: string,
 	column: string,
 	where: string,
-	params: Record<number, unknown>,
+	params: Record<string, DuckDBValue>,
 ): Promise<Map<string, Record<string, number>>> {
 	const reader = await conn.runAndReadAll(
 		`SELECT
@@ -191,7 +191,7 @@ async function breakdownByDesktop(
 	conn: ReturnType<typeof getConnection>,
 	trunc: string,
 	where: string,
-	params: Record<number, unknown>,
+	params: Record<string, DuckDBValue>,
 ): Promise<Map<string, Record<string, number>>> {
 	const reader = await conn.runAndReadAll(
 		`SELECT
@@ -219,7 +219,7 @@ async function breakdownByDesktop(
 async function queryBreakdowns(
 	trunc: string,
 	where: string,
-	params: Record<number, unknown>,
+	params: Record<string, DuckDBValue>,
 ) {
 	const conn = getConnection();
 
@@ -294,7 +294,7 @@ export async function queryAnalytics(
 	const sinceStr = computeSince(granularity, periods);
 
 	const whereClauses = [`date >= $1::DATE`];
-	const params: Record<number, unknown> = { 1: sinceStr };
+	const params: Record<string, DuckDBValue> = { 1: sinceStr };
 	let paramIdx = 2;
 
 	for (const [key, value] of Object.entries(filters)) {
