@@ -2,7 +2,14 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { rateLimiter } from "hono-rate-limiter";
 import type { AppContext } from "@/types/app.js";
-import { upsertSystemInfo, deleteUserData } from "@/analytics.js";
+import {
+	upsertSystemInfo,
+	deleteUserData,
+	queryAnalytics,
+	VALID_GRANULARITIES,
+	ALLOWED_FILTERS,
+	type Granularity,
+} from "@/analytics.js";
 import { systemInfoSchema, forgetSchema } from "@/schemas/telemetry.js";
 
 const telemetry = new Hono<AppContext>();
@@ -47,5 +54,31 @@ telemetry.post(
 		return c.json({ message: "ok" });
 	},
 );
+
+telemetry.get("/analytics", async (c) => {
+	const granularity = (c.req.query("granularity") || "daily") as Granularity;
+	if (!VALID_GRANULARITIES.includes(granularity)) {
+		return c.json(
+			{
+				error: `Invalid granularity. Must be one of: ${VALID_GRANULARITIES.join(", ")}`,
+			},
+			400,
+		);
+	}
+
+	const periods = Math.min(Number(c.req.query("periods") || 30), 365);
+
+	const filters: Record<string, string> = {};
+	for (const key of Object.keys(ALLOWED_FILTERS)) {
+		const value = c.req.query(key);
+		if (value) {
+			filters[key] = value;
+		}
+	}
+
+	const data = await queryAnalytics(granularity, periods, filters);
+
+	return c.json({ data, filters, granularity, periods });
+});
 
 export default telemetry;
