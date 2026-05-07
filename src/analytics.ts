@@ -104,38 +104,50 @@ export async function upsertSystemInfo(
 	);
 }
 
-export async function migrateFromSqlite() {
-	const rows = await prisma.telemetrySystemInfo.findMany();
-	if (rows.length === 0) {
-		return { migrated: 0, message: "No rows to migrate." };
-	}
+let migrationRunning = false;
 
-	let migrated = 0;
-	for (const row of rows) {
-		const desktops = JSON.parse(row.desktops) as string[];
-		const screens = JSON.parse(row.screens);
+export function startMigration() {
+	if (migrationRunning) return false;
+	migrationRunning = true;
 
-		await upsertSystemInfo({
-			userId: row.userId,
-			date: row.date,
-			desktops,
-			vicinaeVersion: row.vicinaeVersion,
-			displayProtocol: row.displayProtocol,
-			architecture: row.architecture,
-			operatingSystem: row.operatingSystem,
-			buildProvenance: row.buildProvenance,
-			locale: row.locale,
-			screens,
-			chassisType: row.chassisType,
-			kernelVersion: row.kernelVersion,
-			productId: row.productId,
-			productVersion: row.productVersion,
-			qtVersion: row.qtVersion ?? undefined,
-		});
-		migrated++;
-	}
+	(async () => {
+		const rows = await prisma.telemetrySystemInfo.findMany();
+		console.log(`[migration] starting: ${rows.length} rows`);
+		if (rows.length === 0) return;
 
-	return { migrated, message: `Migrated ${migrated} rows from SQLite to DuckDB.` };
+		let migrated = 0;
+		for (const row of rows) {
+			await upsertSystemInfo({
+				userId: row.userId,
+				date: row.date,
+				desktops: JSON.parse(row.desktops),
+				vicinaeVersion: row.vicinaeVersion,
+				displayProtocol: row.displayProtocol,
+				architecture: row.architecture,
+				operatingSystem: row.operatingSystem,
+				buildProvenance: row.buildProvenance,
+				locale: row.locale,
+				screens: JSON.parse(row.screens),
+				chassisType: row.chassisType,
+				kernelVersion: row.kernelVersion,
+				productId: row.productId,
+				productVersion: row.productVersion,
+				qtVersion: row.qtVersion ?? undefined,
+			});
+
+			migrated++;
+			if (migrated % 100 === 0) {
+				console.log(`[migration] ${migrated}/${rows.length}`);
+			}
+		}
+		console.log(`[migration] complete: ${migrated} rows`);
+	})().catch((err) => {
+		console.error("[migration] failed:", err);
+	}).finally(() => {
+		migrationRunning = false;
+	});
+
+	return true;
 }
 
 export async function deleteUserData(userId: string) {

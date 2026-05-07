@@ -4,7 +4,7 @@ import {
 	queryRawRows,
 	queryStats,
 	queryAnalytics,
-	migrateFromSqlite,
+	startMigration,
 	VALID_GRANULARITIES,
 	ALLOWED_FILTERS,
 	type Granularity,
@@ -72,9 +72,11 @@ admin.get("/analytics", async (c) => {
 	return c.json({ data, filters, granularity, periods });
 });
 
-admin.post("/telemetry/migrate", async (c) => {
-	const result = await migrateFromSqlite();
-	return c.json(result);
+admin.post("/telemetry/migrate", (c) => {
+	if (!startMigration()) {
+		return c.json({ error: "Migration already in progress" }, 409);
+	}
+	return c.json({ message: "Migration started" }, 202);
 });
 
 export default admin;
