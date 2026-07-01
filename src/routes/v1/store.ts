@@ -291,7 +291,9 @@ app.post("/upload", async (c) => {
 		}
 
 		const platformIds = [];
-		const platforms = validatedManifest.platforms || ["linux"];
+		const platforms = validatedManifest.platforms.map((p) =>
+			p.toLowerCase(),
+		) || ["linux"];
 		for (const platform of platforms) {
 			platformIds.push({ id: platform });
 		}

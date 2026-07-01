@@ -79,7 +79,7 @@ export default z.object({
 			"Currently only MIT is accepted, although more licenses will probably be available in the future.",
 		),
 	platforms: z
-		.array(z.enum(["macOS", "Windows"]))
+		.array(z.enum(["Linux", "macOS", "Windows"]))
 		.min(1)
 		.describe(
 			"Currently only `macOS` and `Windows` are accepted. If not present, the extension is assumed to be available on all platforms.",
