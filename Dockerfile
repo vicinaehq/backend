@@ -24,8 +24,8 @@ RUN bun prisma generate
 FROM oven/bun:1-alpine AS production
 WORKDIR /app
 
-# Install sqlite3 for runtime
-RUN apk add --no-cache sqlite
+# sqlite is used by Prisma. bubblewrap provides the Codex Linux sandbox.
+RUN apk add --no-cache bubblewrap sqlite
 
 # Copy dependencies and built artifacts
 COPY --from=deps /app/node_modules ./node_modules
@@ -34,7 +34,7 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./package.json
 
 # Create storage and analytics data directories
-RUN mkdir -p /app/storage /app/data
+RUN mkdir -p /app/storage /app/data/codex
 ENV ANALYTICS_DB_PATH=/app/data/analytics.duckdb
 
 # Expose port

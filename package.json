@@ -4,17 +4,21 @@
 		"dev": "bun run --hot src/index.ts",
 		"start": "NODE_ENV=production bun run src/index.ts",
 		"format": "biome format --write",
+		"test": "bun test",
 		"type-check": "tsc --noEmit",
 		"prisma-deploy": "prisma migrate deploy"
 	},
 	"dependencies": {
 		"@duckdb/node-api": "^1.5.2-r.1",
 		"@hono/zod-validator": "^0.7.6",
+		"@openai/codex-sdk": "^0.146.0",
 		"@prisma/client": "^6.18.0",
+		"@vicinae/api": "^0.24.0",
 		"dotenv": "^17.2.3",
 		"hono": "^4.10.3",
 		"hono-rate-limiter": "^0.5.3",
 		"jszip": "^3.10.1",
+		"octokit": "^5.0.5",
 		"zod": "^3.24.1"
 	},
 	"devDependencies": {

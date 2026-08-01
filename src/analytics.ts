@@ -42,11 +42,6 @@ export async function closeAnalytics() {
 	connection?.closeSync();
 }
 
-for (const signal of ["SIGTERM", "SIGINT"] as const) {
-	process.on(signal, async () => {
-		await closeAnalytics();
-	});
-}
 process.on("beforeExit", closeAnalytics);
 
 function getConnection() {

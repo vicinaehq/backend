@@ -1,15 +1,17 @@
 import { Hono } from "hono";
-import type { AppContext } from "@/types/app.js";
-import { prisma } from "@/db.js";
+import { logger } from "hono/logger";
+import { rateLimiter } from "hono-rate-limiter";
+import { initAnalytics } from "@/analytics.js";
 import { VALID_PLATFORMS } from "@/constants/platforms.js";
-import { createStorageFromEnv, LocalStorageAdapter } from "@/storage/index.js";
+import { prisma } from "@/db.js";
 import { ipMiddleware } from "@/middleware/ip.js";
+import { startReviewWorker } from "@/reviews/worker.js";
 import storageRouter from "@/routes/storage.js";
 import v1 from "@/routes/v1/index.js";
+import githubWebhook from "@/routes/webhooks/github.js";
+import { createStorageFromEnv, LocalStorageAdapter } from "@/storage/index.js";
+import type { AppContext } from "@/types/app.js";
 import { authMiddleware } from "./middleware/auth";
-import { rateLimiter } from "hono-rate-limiter";
-import { logger } from "hono/logger";
-import { initAnalytics } from "@/analytics.js";
 
 await prisma.$transaction(
 	VALID_PLATFORMS.map((p) =>
@@ -50,6 +52,10 @@ app.get("/", (c) => {
 	return c.json({ message: "Vicinae Backend" });
 });
 
+app.route("/webhooks/github", githubWebhook);
+
 app.route("/v1", v1);
+
+await startReviewWorker();
 
 export default app;
