@@ -1,16 +1,21 @@
+import { Octokit } from "@octokit/rest";
+
+let publicGitHubClient: Octokit | undefined;
+
+function getPublicGitHubClient(): Octokit {
+	publicGitHubClient ??= new Octokit({
+		auth: process.env.GITHUB_TOKEN || undefined,
+		userAgent: "Vicinae-Extension-Store",
+	});
+	return publicGitHubClient;
+}
+
 /**
  * GitHub user information returned by the API
  */
 export interface GitHubUserInfo {
 	login: string;
 	name: string | null;
-	avatar_url: string;
-	html_url: string;
-	bio: string | null;
-	company: string | null;
-	location: string | null;
-	blog: string;
-	twitter_username: string | null;
 }
 
 /**
@@ -21,36 +26,16 @@ export interface GitHubUserInfo {
 export async function fetchGitHubUser(
 	username: string,
 ): Promise<GitHubUserInfo | null> {
-	const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-
 	try {
-		const headers: Record<string, string> = {
-			Accept: "application/vnd.github.v3+json",
-			"User-Agent": "Vicinae-Extension-Store",
-		};
-
-		// Add authorization header if token is available
-		if (GITHUB_TOKEN) {
-			headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
-		}
-
-		const response = await fetch(`https://api.github.com/users/${username}`, {
-			headers,
+		const { data } = await getPublicGitHubClient().rest.users.getByUsername({
+			username,
 		});
-
-		if (!response.ok) {
-			if (response.status === 404) {
-				console.warn(`GitHub user not found: ${username}`);
-				return null;
-			}
-			throw new Error(
-				`GitHub API error: ${response.status} ${response.statusText}`,
-			);
-		}
-
-		const data = await response.json();
-		return data as GitHubUserInfo;
+		return { login: data.login, name: data.name ?? null };
 	} catch (error) {
+		if (error instanceof Error && "status" in error && error.status === 404) {
+			console.warn(`GitHub user not found: ${username}`);
+			return null;
+		}
 		console.error(`Failed to fetch GitHub user ${username}:`, error);
 		return null;
 	}

@@ -24,6 +24,7 @@ const LABELS = {
 		description: "Automated review could not complete",
 	},
 } as const;
+const labelSetup = new Map<string, Promise<void>>();
 
 export type LifecycleStatus =
 	| "draft"
@@ -41,18 +42,63 @@ async function statusText(
 	status: LifecycleStatus,
 	details?: string,
 ): Promise<string> {
-	const text = {
-		draft:
-			"📝 **Draft received.** The automated review will start when this pull request is marked ready for review.",
-		reviewing:
-			"⏳ **Automated review in progress.** A new decision will be submitted for the latest commit.",
-		changes:
-			"🔴 **Contributor changes requested.** Address the blocking inline findings and push a new commit; the bot will review it automatically.",
-		ready:
-			"✅ **Ready for human review.** The automated reviewer approved the latest commit and a maintainer has been notified.",
-		failed: `⚠️ **Automated review failed.** A maintainer can retry by commenting \`${await githubReviewCommand()}\`.`,
-	}[status];
+	let text: string;
+	switch (status) {
+		case "draft":
+			text =
+				"📝 **Draft received.** The automated review will start when this pull request is marked ready for review.";
+			break;
+		case "reviewing":
+			text =
+				"⏳ **Automated review in progress.** A new decision will be submitted for the latest commit.";
+			break;
+		case "changes":
+			text =
+				"🔴 **Contributor changes requested.** Address the blocking inline findings and push a new commit; the bot will review it automatically.";
+			break;
+		case "ready":
+			text =
+				"✅ **Ready for human review.** The automated reviewer approved the latest commit and a maintainer has been notified.";
+			break;
+		case "failed":
+			text = `⚠️ **Automated review failed.** A maintainer can retry by commenting \`${await githubReviewCommand()}\`.`;
+	}
 	return details ? `${text}\n\n${details}` : text;
+}
+
+async function ensureLabels(
+	octokit: ReturnType<typeof getGitHubClient>,
+	owner: string,
+	repo: string,
+): Promise<void> {
+	const key = `${owner}/${repo}`.toLowerCase();
+	let setup = labelSetup.get(key);
+	if (!setup) {
+		setup = (async () => {
+			for (const label of Object.values(LABELS)) {
+				try {
+					await octokit.rest.issues.getLabel({ owner, repo, name: label.name });
+				} catch (error) {
+					if (
+						!(
+							error instanceof Error &&
+							"status" in error &&
+							error.status === 404
+						)
+					)
+						throw error;
+					await octokit.rest.issues.createLabel({ owner, repo, ...label });
+				}
+			}
+		})();
+		labelSetup.set(key, setup);
+	}
+	try {
+		await setup;
+	} catch (error) {
+		labelSetup.delete(key);
+		throw error;
+	}
 }
 
 async function statusComment(
@@ -80,25 +126,7 @@ export async function setLifecycleStatus(
 	},
 ): Promise<void> {
 	const octokit = getGitHubClient();
-	for (const label of Object.values(LABELS)) {
-		try {
-			await octokit.rest.issues.getLabel({
-				owner: input.owner,
-				repo: input.repo,
-				name: label.name,
-			});
-		} catch (error) {
-			if (
-				!(error instanceof Error && "status" in error && error.status === 404)
-			)
-				throw error;
-			await octokit.rest.issues.createLabel({
-				owner: input.owner,
-				repo: input.repo,
-				...label,
-			});
-		}
-	}
+	await ensureLabels(octokit, input.owner, input.repo);
 	const issue = {
 		owner: input.owner,
 		repo: input.repo,

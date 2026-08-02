@@ -24,10 +24,6 @@ RUN DATABASE_URL=file:/tmp/build.db bun prisma generate
 FROM oven/bun:1-alpine AS production
 WORKDIR /app
 
-# sqlite is used by Prisma. Bubblewrap enforces the Codex sandbox; the remaining
-# tools support its read-only reference lookups.
-RUN apk add --no-cache bubblewrap file sqlite
-
 # Copy dependencies and built artifacts
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
