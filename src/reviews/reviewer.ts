@@ -8,7 +8,6 @@ import { type ReviewSourceFile, runCodexReview } from "./runner.js";
 import type { Finding } from "./types.js";
 import { reviewDecision } from "./workflow.js";
 
-const MAX_FILES = 40;
 const MAX_BYTES = 500_000;
 const BINARY_EXTENSIONS = new Set([
 	".avif",
@@ -180,8 +179,6 @@ export async function reviewPullRequest(input: {
 			file.status !== "removed" && file.filename.startsWith("extensions/"),
 	);
 	if (candidates.length === 0) throw new NoReviewableExtensionChangesError();
-	if (candidates.length > MAX_FILES)
-		throw new Error(`Pull request exceeds the ${MAX_FILES}-file review limit`);
 
 	let bytes = 0;
 	let fetchedBlobs = 0;
