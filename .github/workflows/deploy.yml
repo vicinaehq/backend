@@ -43,7 +43,7 @@ jobs:
             # Run migrations
             bun run prisma-deploy
 
-            systemctl restart vicinae
+            sudo systemctl restart vicinae
 
             # Wait for service to be healthy
             echo "Waiting for service to start..."
