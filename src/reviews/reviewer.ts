@@ -1,4 +1,4 @@
-import { addedLines } from "./diff.js";
+import { commentableLines } from "./diff.js";
 import {
 	NoReviewableExtensionChangesError,
 	SupersededReviewError,
@@ -267,7 +267,7 @@ export async function reviewPullRequest(input: {
 	const { blockingCount, decision } = reviewDecision(result.findings);
 
 	const linesByPath = new Map(
-		changed.map((file) => [file.filename, addedLines(file.patch)]),
+		changed.map((file) => [file.filename, commentableLines(file.patch)]),
 	);
 	const comments: Array<{
 		path: string;
@@ -281,13 +281,14 @@ export async function reviewPullRequest(input: {
 	for (const finding of result.findings) {
 		const allowed = linesByPath.get(finding.path);
 		const end = finding.endLine ?? finding.line;
+		const range = Array.from(
+			{ length: end - finding.line + 1 },
+			(_, offset) => finding.line + offset,
+		);
 		const valid =
 			allowed &&
 			end >= finding.line &&
-			Array.from(
-				{ length: end - finding.line + 1 },
-				(_, offset) => finding.line + offset,
-			).every((line) => allowed.has(line));
+			range.every((line) => allowed.has(line));
 		if (!valid) {
 			summaryOnly.push(finding);
 			continue;

@@ -1,4 +1,15 @@
 export function addedLines(patch: string | undefined): Set<number> {
+	return rightSideLines(patch, false);
+}
+
+export function commentableLines(patch: string | undefined): Set<number> {
+	return rightSideLines(patch, true);
+}
+
+function rightSideLines(
+	patch: string | undefined,
+	includeContext: boolean,
+): Set<number> {
 	const lines = new Set<number>();
 	if (!patch) return lines;
 	let newLine = 0;
@@ -11,6 +22,7 @@ export function addedLines(patch: string | undefined): Set<number> {
 		if (text.startsWith("+") && !text.startsWith("+++")) lines.add(newLine++);
 		else if (text.startsWith("-") && !text.startsWith("---")) continue;
 		else if (!text.startsWith("\\")) {
+			if (includeContext) lines.add(newLine);
 			newLine++;
 		}
 	}
