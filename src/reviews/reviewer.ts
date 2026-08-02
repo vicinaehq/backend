@@ -51,6 +51,14 @@ function commentBody(finding: Finding): string {
 	return `**${label} — ${finding.title}**\n\nRule: \`${finding.rule}\`\n\n${finding.explanation}\n\n**Suggested resolution:** ${finding.remediation}${suggestion}`;
 }
 
+function reviewDisclaimer(): string {
+	const maintainer = process.env.GITHUB_REVIEW_MAINTAINER?.replace(/^@/, "");
+	const escalation = maintainer
+		? `reply in the relevant thread and mention \`@${maintainer}\``
+		: "reply in the relevant thread for maintainer review";
+	return `This is an AI-generated first pass and may be mistaken. If a finding is unclear or incorrect, ${escalation}.`;
+}
+
 function sourceContent(
 	decoded: Buffer,
 	fileSize: number,
@@ -309,7 +317,7 @@ export async function reviewPullRequest(input: {
 	const fallback = summaryOnly.length
 		? `\n\n### Findings without an inline diff location\n\n${summaryOnly.map((finding) => `- **${finding.title}** (\`${finding.path}:${finding.line}\`, ${finding.rule}): ${finding.explanation} ${finding.remediation}`).join("\n")}`
 		: "";
-	const body = `${result.summary}${fallback}\n\n---\n_${blockingCount > 0 ? `Automated review found ${blockingCount} publication-blocking issue${blockingCount === 1 ? "" : "s"}.` : "Automated extension review passed. A maintainer review is still required."}_`;
+	const body = `${result.summary}${fallback}\n\n---\n_${blockingCount > 0 ? `Automated review found ${blockingCount} publication-blocking issue${blockingCount === 1 ? "" : "s"}.` : "Automated extension review passed. A maintainer review is still required."}_\n\n${reviewDisclaimer()}`;
 	const { data: review } = await octokit.rest.pulls.createReview({
 		...coordinates,
 		commit_id: pull.head.sha,
