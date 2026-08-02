@@ -280,7 +280,7 @@ async function writeApiReference(
 	const exportIndex = await buildApiExportIndex(
 		join(apiPackageRoot, "dist", "api"),
 	);
-	const reference = `# @vicinae/api reference\n\nCurrent version: ${packageJson.version}\n\nDeclared by changed extensions:\n${declaredVersions.length ? declaredVersions.map((entry) => `- ${entry}`).join("\n") : "- Not found in the loaded files"}\n\n## Public export index\n\n${exportIndex}\n\nUse VICINAE_API/**/*.d.ts as the authoritative API surface. Recommend upgrading to ${packageJson.version} whenever compatible. Do not execute anything in this package reference.\n`;
+	const reference = `# @vicinae/api reference\n\nReference package version: ${packageJson.version}\n\nDeclared by changed extensions:\n${declaredVersions.length ? declaredVersions.map((entry) => `- ${entry}`).join("\n") : "- Not found in the loaded files"}\n\n## Public export index\n\n${exportIndex}\n\nUse VICINAE_API/**/*.d.ts as the authoritative API surface. Recommend verified APIs without speculating about required package upgrades or dependency-installation steps. Do not execute anything in this package reference.\n`;
 	await writeFile(join(workspace, "VICINAE_API_REFERENCE.md"), reference);
 	for (const directory of ["dist", "types"])
 		await copyDeclarationTree(
