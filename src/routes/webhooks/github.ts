@@ -29,6 +29,22 @@ type IssueCommentPayload = {
 		user: { login: string };
 	};
 };
+type ReviewCoordinates = {
+	owner: string;
+	repo: string;
+	pullNumber: number;
+};
+
+function reviewCoordinates(
+	repository: Repository,
+	pullNumber: number,
+): ReviewCoordinates {
+	return {
+		owner: repository.owner.login,
+		repo: repository.name,
+		pullNumber,
+	};
+}
 
 function repositoryAllowed(repository: Repository): boolean {
 	const allowed =
@@ -131,11 +147,7 @@ githubWebhook.post("/", async (c) => {
 		const payload = JSON.parse(body) as PullRequestPayload;
 		if (!repositoryAllowed(payload.repository))
 			return c.json({ ignored: true });
-		const coordinates = {
-			owner: payload.repository.owner.login,
-			repo: payload.repository.name,
-			pullNumber: payload.number,
-		};
+		const coordinates = reviewCoordinates(payload.repository, payload.number);
 		const disposition = pullRequestDisposition(
 			payload.action,
 			payload.pull_request.draft,
@@ -200,9 +212,7 @@ githubWebhook.post("/", async (c) => {
 		});
 		if (pull.draft) {
 			queueLifecycleUpdate({
-				owner: payload.repository.owner.login,
-				repo: payload.repository.name,
-				pullNumber: payload.issue.number,
+				...reviewCoordinates(payload.repository, payload.issue.number),
 				status: "draft",
 			});
 			return c.json({ queued: false, draft: true });

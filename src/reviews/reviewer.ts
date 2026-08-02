@@ -31,6 +31,11 @@ const BINARY_EXTENSIONS = new Set([
 	".woff2",
 	".zip",
 ]);
+const FINDING_LABEL = {
+	blocking: "🔴 Blocking",
+	warning: "🟠 Warning",
+	suggestion: "🔵 Suggestion",
+} as const;
 
 function extension(path: string): string {
 	const index = path.lastIndexOf(".");
@@ -38,16 +43,31 @@ function extension(path: string): string {
 }
 
 function commentBody(finding: Finding): string {
-	const label = {
-		blocking: "🔴 Blocking",
-		warning: "🟠 Warning",
-		suggestion: "🔵 Suggestion",
-	}[finding.severity];
+	const label = FINDING_LABEL[finding.severity];
 	const suggestion =
 		finding.suggestedChange && !finding.suggestedChange.includes("```")
 			? `\n\n\`\`\`suggestion\n${finding.suggestedChange}\n\`\`\``
 			: "";
 	return `**${label} — ${finding.title}**\n\nRule: \`${finding.rule}\`\n\n${finding.explanation}\n\n**Suggested resolution:** ${finding.remediation}${suggestion}`;
+}
+
+function sourceContent(
+	decoded: Buffer,
+	fileSize: number,
+	fileSha: string,
+	currentBytes: number,
+): { content: string; binary: boolean } {
+	if (decoded.includes(0))
+		return {
+			content: `Binary asset: ${fileSize} bytes, Git blob ${fileSha}. Do not inspect its bytes without concrete evidence that the asset is suspicious or mismatched.`,
+			binary: true,
+		};
+	if (currentBytes + decoded.byteLength > MAX_BYTES)
+		return {
+			content: `[Content omitted from the review context: ${fileSize} byte file exceeds the ${MAX_BYTES} byte total source budget. Review its patch and treat unreviewed generated or binary content cautiously.]`,
+			binary: false,
+		};
+	return { content: decoded.toString("utf8"), binary: false };
 }
 
 export async function reviewPullRequest(input: {
@@ -179,12 +199,12 @@ export async function reviewPullRequest(input: {
 				`Unsupported GitHub blob encoding for ${file.filename}: ${data.encoding}`,
 			);
 		const decoded = Buffer.from(data.content.replaceAll("\n", ""), "base64");
-		const binary = decoded.includes(0);
-		const content = binary
-			? `Binary asset: ${data.size} bytes, Git blob ${file.sha}. Do not inspect its bytes without concrete evidence that the asset is suspicious or mismatched.`
-			: bytes + decoded.byteLength <= MAX_BYTES
-				? decoded.toString("utf8")
-				: `[Content omitted from the review context: ${data.size} byte file exceeds the ${MAX_BYTES} byte total source budget. Review its patch and treat unreviewed generated or binary content cautiously.]`;
+		const { content, binary } = sourceContent(
+			decoded,
+			data.size,
+			file.sha,
+			bytes,
+		);
 		if (!binary) bytes += Buffer.byteLength(content);
 		sources.push({ path: file.filename, content, binary });
 	}

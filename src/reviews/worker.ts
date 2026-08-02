@@ -31,6 +31,16 @@ async function updateLifecycle(
 	}
 }
 
+function failureStatus(error: unknown): "superseded" | "skipped" | "failed" {
+	if (error instanceof SupersededReviewError) return "superseded";
+	if (error instanceof NoReviewableExtensionChangesError) return "skipped";
+	return "failed";
+}
+
+function blockingFindingsMessage(count: number): string {
+	return `${count} blocking finding${count === 1 ? "" : "s"} must be addressed.`;
+}
+
 export function cancelSupersededReview(input: {
 	owner: string;
 	repository: string;
@@ -96,19 +106,19 @@ async function processOne(): Promise<void> {
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			const superseded = error instanceof SupersededReviewError;
-			const skipped = error instanceof NoReviewableExtensionChangesError;
-			if (skipped) console.log(`Review job ${job.id} skipped: ${message}`);
-			else if (!superseded)
+			const status = failureStatus(error);
+			if (status === "skipped")
+				console.log(`Review job ${job.id} skipped: ${message}`);
+			else if (status === "failed")
 				console.error(`Review job ${job.id} failed:`, error);
 			await prisma.pullRequestReviewJob.update({
 				where: { id: job.id },
 				data: {
-					status: superseded ? "superseded" : skipped ? "skipped" : "failed",
-					error: skipped ? null : message.slice(0, 2000),
+					status,
+					error: status === "skipped" ? null : message.slice(0, 2000),
 				},
 			});
-			if (skipped)
+			if (status === "skipped")
 				await updateLifecycle({
 					owner: job.owner,
 					repo: job.repository,
@@ -116,7 +126,7 @@ async function processOne(): Promise<void> {
 					status: "skipped",
 					headSha: job.headSha ?? undefined,
 				});
-			else if (!superseded)
+			else if (status === "failed")
 				await updateLifecycle({
 					owner: job.owner,
 					repo: job.repository,
@@ -145,7 +155,7 @@ async function processOne(): Promise<void> {
 			headSha: result.headSha,
 			details:
 				result.decision === "changes"
-					? `${result.blockingCount} blocking finding${result.blockingCount === 1 ? "" : "s"} must be addressed.`
+					? blockingFindingsMessage(result.blockingCount)
 					: "No blocking findings remain on the latest commit.",
 		});
 	} finally {

@@ -34,11 +34,37 @@ export type LifecycleStatus =
 	| "ready"
 	| "skipped"
 	| "failed";
+const LABEL_FOR_STATUS: Partial<Record<LifecycleStatus, string>> = {
+	reviewing: LABELS.reviewing.name,
+	changes: LABELS.changes.name,
+	ready: LABELS.ready.name,
+	failed: LABELS.failed.name,
+};
 type Coordinates = {
 	owner: string;
 	repo: string;
 	pullNumber: number;
 };
+
+function hasHttpStatus(error: unknown, status: number): boolean {
+	return (
+		error instanceof Error &&
+		"status" in error &&
+		typeof error.status === "number" &&
+		error.status === status
+	);
+}
+
+function targetHeadUpdate(status: LifecycleStatus, headSha?: string) {
+	switch (status) {
+		case "reviewing":
+			return { targetHeadSha: headSha };
+		case "draft":
+			return { targetHeadSha: null };
+		default:
+			return {};
+	}
+}
 
 async function statusText(
 	status: LifecycleStatus,
@@ -85,14 +111,7 @@ async function ensureLabels(
 				try {
 					await octokit.rest.issues.getLabel({ owner, repo, name: label.name });
 				} catch (error) {
-					if (
-						!(
-							error instanceof Error &&
-							"status" in error &&
-							error.status === 404
-						)
-					)
-						throw error;
+					if (!hasHttpStatus(error, 404)) throw error;
 					await octokit.rest.issues.createLabel({ owner, repo, ...label });
 				}
 			}
@@ -146,13 +165,7 @@ async function setLifecycleStatus(
 				pullNumber: input.pullNumber,
 			},
 		},
-		update: {
-			...(input.status === "reviewing"
-				? { targetHeadSha: input.headSha }
-				: input.status === "draft"
-					? { targetHeadSha: null }
-					: {}),
-		},
+		update: targetHeadUpdate(input.status, input.headSha),
 		create: {
 			owner: input.owner,
 			repository: input.repo,
@@ -189,10 +202,7 @@ async function setLifecycleStatus(
 				body,
 			});
 		} catch (error) {
-			if (
-				!(error instanceof Error && "status" in error && error.status === 404)
-			)
-				throw error;
+			if (!hasHttpStatus(error, 404)) throw error;
 			commentId = (await octokit.rest.issues.createComment({ ...issue, body }))
 				.data.id;
 		}
@@ -200,16 +210,7 @@ async function setLifecycleStatus(
 		commentId = (await octokit.rest.issues.createComment({ ...issue, body }))
 			.data.id;
 
-	const wanted =
-		input.status === "reviewing"
-			? LABELS.reviewing.name
-			: input.status === "changes"
-				? LABELS.changes.name
-				: input.status === "ready"
-					? LABELS.ready.name
-					: input.status === "failed"
-						? LABELS.failed.name
-						: undefined;
+	const wanted = LABEL_FOR_STATUS[input.status];
 	const { data: currentIssue } = await octokit.rest.issues.get(issue);
 	const currentLabels = new Set(
 		currentIssue.labels
@@ -222,14 +223,7 @@ async function setLifecycleStatus(
 			.filter((name) => name !== wanted && currentLabels.has(name))
 			.map((name) =>
 				octokit.rest.issues.removeLabel({ ...issue, name }).catch((error) => {
-					if (
-						!(
-							error instanceof Error &&
-							"status" in error &&
-							error.status === 404
-						)
-					)
-						throw error;
+					if (!hasHttpStatus(error, 404)) throw error;
 				}),
 			),
 	);

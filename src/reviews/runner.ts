@@ -314,9 +314,7 @@ function logCompletedItem(
 			if (item.text) console.log(`[codex-review] ${item.text}`);
 			break;
 		case "command_execution":
-			console.log(
-				`[codex-review] command ${item.status ?? "completed"}${item.exit_code === undefined ? "" : ` (exit ${item.exit_code})`}${durationMs === undefined ? "" : ` in ${(durationMs / 1000).toFixed(2)}s`}: ${item.command}`,
-			);
+			logCompletedCommand(item, durationMs);
 			break;
 		case "todo_list": {
 			const completed =
@@ -329,6 +327,17 @@ function logCompletedItem(
 		case "error":
 			console.warn(`[codex-review] agent item error: ${item.message}`);
 	}
+}
+
+function logCompletedCommand(
+	item: { command?: string; status?: string; exit_code?: number },
+	durationMs?: number,
+): void {
+	const outcome = [`command ${item.status ?? "completed"}`];
+	if (item.exit_code !== undefined) outcome.push(`(exit ${item.exit_code})`);
+	if (durationMs !== undefined)
+		outcome.push(`in ${(durationMs / 1000).toFixed(2)}s`);
+	console.log(`[codex-review] ${outcome.join(" ")}: ${item.command}`);
 }
 
 export async function runCodexReview(
