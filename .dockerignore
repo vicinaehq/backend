@@ -32,7 +32,6 @@ dev.db
 dev.db-journal
 
 # Prisma
-prisma/migrations/
 *.db
 *.db-journal
 

@@ -1,5 +1,5 @@
 import { prisma } from "@/db.js";
-import { getGitHubApp } from "./github-app.js";
+import { getGitHubClient, githubReviewCommand } from "./github.js";
 
 const MARKER = "<!-- vicinae-ai-review-status -->";
 const LABELS = {
@@ -32,13 +32,15 @@ export type LifecycleStatus =
 	| "ready"
 	| "failed";
 type Coordinates = {
-	installationId: number;
 	owner: string;
 	repo: string;
 	pullNumber: number;
 };
 
-function statusText(status: LifecycleStatus, details?: string): string {
+async function statusText(
+	status: LifecycleStatus,
+	details?: string,
+): Promise<string> {
 	const text = {
 		draft:
 			"📝 **Draft received.** The automated review will start when this pull request is marked ready for review.",
@@ -48,13 +50,15 @@ function statusText(status: LifecycleStatus, details?: string): string {
 			"🔴 **Contributor changes requested.** Address the blocking inline findings and push a new commit; the bot will review it automatically.",
 		ready:
 			"✅ **Ready for human review.** The automated reviewer approved the latest commit and a maintainer has been notified.",
-		failed:
-			"⚠️ **Automated review failed.** A maintainer can retry by commenting `/ai-review`.",
+		failed: `⚠️ **Automated review failed.** A maintainer can retry by commenting \`${await githubReviewCommand()}\`.`,
 	}[status];
 	return details ? `${text}\n\n${details}` : text;
 }
 
-function statusComment(status: LifecycleStatus, details?: string): string {
+async function statusComment(
+	status: LifecycleStatus,
+	details?: string,
+): Promise<string> {
 	return `${MARKER}
 Thanks for contributing an extension to Vicinae! 👋
 
@@ -63,7 +67,7 @@ Before publication, this pull request receives two reviews:
 1. An automated review for extension guidelines, safety, error handling, and likely correctness issues.
 2. A final review from a Vicinae maintainer.
 
-${statusText(status, details)}
+${await statusText(status, details)}
 
 The automated reviewer examines only the current commit. New commits invalidate its previous decision and start another review.`;
 }
@@ -75,9 +79,7 @@ export async function setLifecycleStatus(
 		details?: string;
 	},
 ): Promise<void> {
-	const octokit = await getGitHubApp().getInstallationOctokit(
-		input.installationId,
-	);
+	const octokit = getGitHubClient();
 	for (const label of Object.values(LABELS)) {
 		try {
 			await octokit.rest.issues.getLabel({
@@ -111,7 +113,6 @@ export async function setLifecycleStatus(
 			},
 		},
 		update: {
-			installationId: input.installationId,
 			...(input.status === "reviewing"
 				? { targetHeadSha: input.headSha }
 				: input.status === "draft"
@@ -119,7 +120,6 @@ export async function setLifecycleStatus(
 					: {}),
 		},
 		create: {
-			installationId: input.installationId,
 			owner: input.owner,
 			repository: input.repo,
 			pullNumber: input.pullNumber,
@@ -145,7 +145,7 @@ export async function setLifecycleStatus(
 		});
 		commentId = comments.find((comment) => comment.body?.includes(MARKER))?.id;
 	}
-	const body = statusComment(input.status, input.details);
+	const body = await statusComment(input.status, input.details);
 	if (commentId)
 		await octokit.rest.issues.updateComment({
 			owner: input.owner,

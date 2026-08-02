@@ -7,7 +7,7 @@ Documentation=https://github.com/vicinaehq/store
 Type=simple
 User=vicinae
 Group=vicinae
-WorkingDirectory=/opt/vicinae
+WorkingDirectory=/opt/vicinae/backend
 
 # Environment
 EnvironmentFile=/opt/vicinae/.env

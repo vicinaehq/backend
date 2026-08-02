@@ -1,21 +1,25 @@
 import { Hono } from "hono";
 import { prisma } from "@/db.js";
-import { getGitHubApp } from "@/reviews/github-app.js";
+import {
+	getGitHubClient,
+	githubReviewCommand,
+	isGitHubReviewCommand,
+	verifyGitHubWebhook,
+} from "@/reviews/github.js";
 import { setLifecycleStatus } from "@/reviews/lifecycle.js";
+import { cancelSupersededReview } from "@/reviews/worker.js";
 import { pullRequestDisposition } from "@/reviews/workflow.js";
 import type { AppContext } from "@/types/app.js";
 
 type Repository = { name: string; owner: { login: string }; full_name: string };
 type PullRequestPayload = {
 	action: string;
-	installation?: { id: number };
 	repository: Repository;
 	number: number;
 	pull_request: { draft: boolean; head: { sha: string } };
 };
 type IssueCommentPayload = {
 	action: string;
-	installation?: { id: number };
 	repository: Repository;
 	issue: { number: number; pull_request?: unknown; user: { login: string } };
 	comment: {
@@ -34,43 +38,65 @@ function repositoryAllowed(repository: Repository): boolean {
 
 async function queueReview(input: {
 	deliveryId: string;
-	installationId: number;
 	repository: Repository;
 	pullNumber: number;
 	headSha: string;
-}): Promise<void> {
-	await prisma.pullRequestReviewJob.updateMany({
-		where: {
-			owner: input.repository.owner.login,
-			repository: input.repository.name,
-			pullNumber: input.pullNumber,
-			status: "pending",
-		},
-		data: {
-			status: "superseded",
-			error: "Superseded by a newer review request",
-		},
+}): Promise<boolean> {
+	cancelSupersededReview({
+		owner: input.repository.owner.login,
+		repository: input.repository.name,
+		pullNumber: input.pullNumber,
+		headSha: input.headSha,
 	});
-	await prisma.pullRequestReviewJob.upsert({
-		where: { deliveryId: input.deliveryId },
-		update: {},
-		create: {
-			deliveryId: input.deliveryId,
-			installationId: input.installationId,
-			owner: input.repository.owner.login,
-			repository: input.repository.name,
-			pullNumber: input.pullNumber,
-			headSha: input.headSha,
-		},
+	const queued = await prisma.$transaction(async (transaction) => {
+		const existingDelivery = await transaction.pullRequestReviewJob.findUnique({
+			where: { deliveryId: input.deliveryId },
+			select: { id: true },
+		});
+		if (existingDelivery) return false;
+		await transaction.pullRequestReviewJob.updateMany({
+			where: {
+				owner: input.repository.owner.login,
+				repository: input.repository.name,
+				pullNumber: input.pullNumber,
+				status: "pending",
+				headSha: { not: input.headSha },
+			},
+			data: {
+				status: "superseded",
+				error: "Superseded by a newer review request",
+			},
+		});
+		const active = await transaction.pullRequestReviewJob.findFirst({
+			where: {
+				owner: input.repository.owner.login,
+				repository: input.repository.name,
+				pullNumber: input.pullNumber,
+				headSha: input.headSha,
+				status: { in: ["pending", "processing"] },
+			},
+			select: { id: true },
+		});
+		if (active) return false;
+		await transaction.pullRequestReviewJob.create({
+			data: {
+				deliveryId: input.deliveryId,
+				owner: input.repository.owner.login,
+				repository: input.repository.name,
+				pullNumber: input.pullNumber,
+				headSha: input.headSha,
+			},
+		});
+		return true;
 	});
 	await setLifecycleStatus({
-		installationId: input.installationId,
 		owner: input.repository.owner.login,
 		repo: input.repository.name,
 		pullNumber: input.pullNumber,
 		status: "reviewing",
 		headSha: input.headSha,
 	});
+	return queued;
 }
 
 const githubWebhook = new Hono<AppContext>();
@@ -78,7 +104,7 @@ const githubWebhook = new Hono<AppContext>();
 githubWebhook.post("/", async (c) => {
 	const body = await c.req.text();
 	const signature = c.req.header("X-Hub-Signature-256");
-	if (!signature || !(await getGitHubApp().webhooks.verify(body, signature)))
+	if (!signature || !verifyGitHubWebhook(body, signature))
 		return c.json({ error: "Invalid signature" }, 401);
 	if (process.env.CODEX_REVIEW_ENABLED !== "true")
 		return c.json({ ignored: true, reason: "reviewer disabled" });
@@ -92,10 +118,7 @@ githubWebhook.post("/", async (c) => {
 		const payload = JSON.parse(body) as PullRequestPayload;
 		if (!repositoryAllowed(payload.repository))
 			return c.json({ ignored: true });
-		if (!payload.installation?.id)
-			return c.json({ error: "GitHub App installation is missing" }, 400);
 		const coordinates = {
-			installationId: payload.installation.id,
 			owner: payload.repository.owner.login,
 			repo: payload.repository.name,
 			pullNumber: payload.number,
@@ -109,14 +132,13 @@ githubWebhook.post("/", async (c) => {
 			return c.json({ welcomed: true });
 		}
 		if (disposition === "ignore") return c.json({ ignored: true });
-		await queueReview({
+		const queued = await queueReview({
 			deliveryId,
-			installationId: payload.installation.id,
 			repository: payload.repository,
 			pullNumber: payload.number,
 			headSha: payload.pull_request.head.sha,
 		});
-		return c.json({ queued: true }, 202);
+		return c.json({ queued }, queued ? 202 : 200);
 	}
 
 	if (event === "issue_comment") {
@@ -124,27 +146,27 @@ githubWebhook.post("/", async (c) => {
 		if (
 			payload.action !== "created" ||
 			!payload.issue.pull_request ||
-			payload.comment.body.trim() !== "/ai-review" ||
+			!(await isGitHubReviewCommand(payload.comment.body)) ||
 			!repositoryAllowed(payload.repository)
 		)
 			return c.json({ ignored: true });
-		if (!payload.installation?.id)
-			return c.json({ error: "GitHub App installation is missing" }, 400);
 		const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-		const isAuthor =
-			payload.comment.user.login.toLowerCase() ===
-			payload.issue.user.login.toLowerCase();
-		if (!isAuthor && !trusted.has(payload.comment.author_association))
+		const octokit = getGitHubClient();
+		if (!trusted.has(payload.comment.author_association)) {
+			await octokit.rest.issues.createComment({
+				owner: payload.repository.owner.login,
+				repo: payload.repository.name,
+				issue_number: payload.issue.number,
+				body: `@${payload.comment.user.login} only a Vicinae organization member or repository collaborator can request a manual review. New commits are reviewed automatically.`,
+			});
 			return c.json(
 				{
 					error:
-						"Only the pull request author or a collaborator can request a review",
+						"Only an organization member or repository collaborator can request a manual review",
 				},
 				403,
 			);
-		const octokit = await getGitHubApp().getInstallationOctokit(
-			payload.installation.id,
-		);
+		}
 		try {
 			await octokit.rest.reactions.createForIssueComment({
 				owner: payload.repository.owner.login,
@@ -154,7 +176,7 @@ githubWebhook.post("/", async (c) => {
 			});
 		} catch (error) {
 			console.warn(
-				`Could not react to /ai-review comment ${payload.comment.id}:`,
+				`Could not react to ${await githubReviewCommand()} comment ${payload.comment.id}:`,
 				error,
 			);
 		}
@@ -165,7 +187,6 @@ githubWebhook.post("/", async (c) => {
 		});
 		if (pull.draft) {
 			await setLifecycleStatus({
-				installationId: payload.installation.id,
 				owner: payload.repository.owner.login,
 				repo: payload.repository.name,
 				pullNumber: payload.issue.number,
@@ -173,14 +194,13 @@ githubWebhook.post("/", async (c) => {
 			});
 			return c.json({ queued: false, draft: true });
 		}
-		await queueReview({
+		const queued = await queueReview({
 			deliveryId,
-			installationId: payload.installation.id,
 			repository: payload.repository,
 			pullNumber: payload.issue.number,
 			headSha: pull.head.sha,
 		});
-		return c.json({ queued: true }, 202);
+		return c.json({ queued }, queued ? 202 : 200);
 	}
 
 	return c.json({ ignored: true });

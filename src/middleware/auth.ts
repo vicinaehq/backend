@@ -10,8 +10,8 @@ export const authMiddleware = (): MiddlewareHandler<AppContext> => {
 
 		// check but don't block
 		if (key !== API_SECRET) {
-			if (key.length != 0) {
-				console.warn(`Got invalid api secret: ${key}`);
+			if (key.length !== 0) {
+				console.warn("Received an invalid API credential");
 			}
 			c.set("authenticated", false);
 			return next();

@@ -2,7 +2,6 @@
 CREATE TABLE "PullRequestReviewJob" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "deliveryId" TEXT NOT NULL,
-    "installationId" INTEGER NOT NULL,
     "owner" TEXT NOT NULL,
     "repository" TEXT NOT NULL,
     "pullNumber" INTEGER NOT NULL,
@@ -24,7 +23,6 @@ CREATE INDEX "PullRequestReviewJob_status_createdAt_idx" ON "PullRequestReviewJo
 -- CreateTable
 CREATE TABLE "PullRequestReviewState" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "installationId" INTEGER NOT NULL,
     "owner" TEXT NOT NULL,
     "repository" TEXT NOT NULL,
     "pullNumber" INTEGER NOT NULL,

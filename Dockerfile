@@ -15,17 +15,18 @@ COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 
 COPY . .
-COPY --from=deps /app/node_modules ./node_modules
 
-# Generate Prisma client
-RUN bun prisma generate
+# Generate Prisma client (generation validates the configured datasource but does
+# not create or access this temporary database).
+RUN DATABASE_URL=file:/tmp/build.db bun prisma generate
 
 # Production stage - minimal runtime image
 FROM oven/bun:1-alpine AS production
 WORKDIR /app
 
-# sqlite is used by Prisma. bubblewrap provides the Codex Linux sandbox.
-RUN apk add --no-cache bubblewrap sqlite
+# sqlite is used by Prisma. Bubblewrap enforces the Codex sandbox; the remaining
+# tools support its read-only reference lookups.
+RUN apk add --no-cache bubblewrap file sqlite
 
 # Copy dependencies and built artifacts
 COPY --from=deps /app/node_modules ./node_modules

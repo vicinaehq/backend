@@ -112,7 +112,6 @@ model TelemetrySystemInfo {
 model PullRequestReviewJob {
 	id String @id @default(nanoid())
 	deliveryId String @unique
-	installationId Int
 	owner String
 	repository String
 	pullNumber Int
@@ -130,7 +129,6 @@ model PullRequestReviewJob {
 
 model PullRequestReviewState {
 	id String @id @default(nanoid())
-	installationId Int
 	owner String
 	repository String
 	pullNumber Int

@@ -47,32 +47,24 @@ bun run dev
 
 ## AI-assisted pull request reviews
 
-The backend welcomes extension contributors and automatically runs a Codex review when a non-draft pull request is opened, marked ready, reopened, or updated. Blocking findings produce `REQUEST_CHANGES`; a clean review produces `APPROVE` and marks the PR `human-reviewable`. The pull request author or a collaborator can also comment `/ai-review` to retry.
+The backend welcomes extension contributors and automatically runs a Codex review when a non-draft pull request is opened, marked ready, reopened, or updated. Blocking findings produce `REQUEST_CHANGES`; a clean review produces `APPROVE` and marks the PR `human-reviewable`. An organization member or repository collaborator can retry by mentioning the reviewer account with a comment containing only `@<reviewer> review`.
 
-The intended repository rule requires two approvals: the App's automated extension-policy approval and a final Code Owner approval from a Vicinae maintainer. Enable stale-approval dismissal so every new commit must pass both reviewers again.
+The intended repository rule requires two approvals: the reviewer's automated extension-policy approval and a final Code Owner approval from a Vicinae maintainer. Enable stale-approval dismissal so every new commit must pass both reviewers again.
 
-### GitHub App
+### GitHub reviewer account
 
-Create and install a GitHub App on `vicinaehq/extensions` with:
+Create a fine-grained personal access token for the dedicated reviewer account, limited to `vicinaehq/extensions`, with:
 
 - Contents: read
 - Pull requests: read and write
 - Issues: read and write
-- Metadata: read
-- Event subscriptions: Pull request and Issue comment
-- Webhook URL: `https://store.vicinae.dev/webhooks/github`
+- Metadata: read (automatically granted)
 
-Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_REVIEW_REPOSITORY`, and `GITHUB_REVIEW_MAINTAINER`. The webhook verifies every delivery through Octokit and accepts the manual command only from the PR author or a collaborator.
+Add a repository webhook for Pull request and Issue comment events pointing to `https://store.vicinae.dev/webhooks/github`. Configure the same secret as `GITHUB_WEBHOOK_SECRET`.
 
-Encode the downloaded GitHub App private key before adding it to your environment:
+Set `GITHUB_PAT`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_REVIEW_REPOSITORY`, and `GITHUB_REVIEW_MAINTAINER`. The backend discovers the reviewer login from the PAT, verifies every webhook delivery, and accepts the strict `@<reviewer> review` command only from an organization member or repository collaborator.
 
-```sh
-base64 -w 0 your-app.private-key.pem
-```
-
-Base64 is only an encoding; keep the resulting value secret.
-
-The App maintains one welcome/status comment and the following labels:
+The reviewer maintains one welcome/status comment and the following labels:
 
 - `ai-reviewing`
 - `ai-changes-requested`
@@ -98,6 +90,8 @@ bun prisma migrate deploy
 ```env
 CODEX_REVIEW_ENABLED=true
 CODEX_REVIEW_HOME=/app/data/codex
+CODEX_REVIEW_REASONING_EFFORT=high
+CODEX_REVIEW_TIMEOUT_MS=900000
 ```
 
-Each job uses an ephemeral directory containing only the trusted guidelines, PR diff, changed extension files, and the pinned `@vicinae/api` TypeScript declarations. Package runtime code is not exposed or executed. The reviewer verifies API recommendations against those declarations, recommends compatible upgrades, and can attach one-click GitHub suggested changes for small exact replacements. The Codex SDK receives a sanitized environment and runs with a read-only sandbox, no approvals, no command network access, and no web search. The Docker image includes Bubblewrap for the Linux sandbox.
+Each job uses an ephemeral directory containing only the trusted extension-reviewer skill, PR diff, changed extension files, and the pinned `@vicinae/api` TypeScript declarations. Package runtime code is not exposed or executed. The reviewer verifies API recommendations against those declarations, recommends compatible upgrades, and can attach one-click GitHub suggested changes for small exact replacements. The Codex SDK receives a sanitized environment and a least-privilege permission profile: model-generated commands can read only minimal runtime paths and the ephemeral review workspace, with no filesystem writes, approvals, command network access, or web search. The private Codex state directory remains outside that profile. The Docker image includes Bubblewrap for Linux enforcement.

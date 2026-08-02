@@ -12,7 +12,7 @@ jobs:
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: production
       url: https://${{ vars.DOMAIN }}
@@ -43,13 +43,17 @@ jobs:
             # Run migrations
             bun run prisma-deploy
 
+            # Keep the deployed systemd unit in sync with the repository.
+            sudo install -m 0644 extra/vicinae.service /etc/systemd/system/vicinae.service
+            sudo systemctl daemon-reload
             sudo systemctl restart vicinae
 
             # Wait for service to be healthy
             echo "Waiting for service to start..."
             sleep 5
 
-            # Verify service is running
-            sudo systemctl is-active --quiet vicinae && echo "✅ Service is running" || echo "❌ Service failed to start"
+            # Verify both the process and HTTP server.
+            sudo systemctl is-active --quiet vicinae
+            curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null
 
             echo "Deployment completed successfully!"
