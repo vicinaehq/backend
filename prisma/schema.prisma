@@ -109,3 +109,35 @@ model TelemetrySystemInfo {
 	@@index([vicinaeVersion])
 }
 
+model PullRequestReviewJob {
+	id String @id @default(nanoid())
+	deliveryId String @unique
+	owner String
+	repository String
+	pullNumber Int
+	status String @default("pending")
+	attempts Int @default(0)
+	headSha String?
+	// GitHub database IDs exceed signed 32-bit integers.
+	reviewId BigInt?
+	error String?
+	createdAt DateTime @default(now())
+	updatedAt DateTime @updatedAt
+
+	@@index([status, createdAt])
+}
+
+model PullRequestReviewState {
+	id String @id @default(nanoid())
+	owner String
+	repository String
+	pullNumber Int
+	// GitHub database IDs exceed signed 32-bit integers.
+	statusCommentId BigInt?
+	targetHeadSha String?
+	lastNotifiedSha String?
+	createdAt DateTime @default(now())
+	updatedAt DateTime @updatedAt
+
+	@@unique([owner, repository, pullNumber])
+}

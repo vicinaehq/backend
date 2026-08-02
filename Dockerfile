@@ -15,17 +15,14 @@ COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 
 COPY . .
-COPY --from=deps /app/node_modules ./node_modules
 
-# Generate Prisma client
-RUN bun prisma generate
+# Generate Prisma client (generation validates the configured datasource but does
+# not create or access this temporary database).
+RUN DATABASE_URL=file:/tmp/build.db bun prisma generate
 
 # Production stage - minimal runtime image
 FROM oven/bun:1-alpine AS production
 WORKDIR /app
-
-# Install sqlite3 for runtime
-RUN apk add --no-cache sqlite
 
 # Copy dependencies and built artifacts
 COPY --from=deps /app/node_modules ./node_modules
@@ -34,7 +31,7 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./package.json
 
 # Create storage and analytics data directories
-RUN mkdir -p /app/storage /app/data
+RUN mkdir -p /app/storage /app/data/codex
 ENV ANALYTICS_DB_PATH=/app/data/analytics.duckdb
 
 # Expose port

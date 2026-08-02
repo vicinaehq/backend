@@ -1,0 +1,277 @@
+import { prisma } from "@/db.js";
+import { getGitHubClient, githubReviewCommand } from "./github.js";
+
+const MARKER = "<!-- vicinae-ai-review-status -->";
+const LABELS = {
+	reviewing: {
+		name: "ai-reviewing",
+		color: "FBCA04",
+		description: "Automated extension review is running",
+	},
+	changes: {
+		name: "ai-changes-requested",
+		color: "D93F0B",
+		description: "Automated review found blocking issues",
+	},
+	ready: {
+		name: "human-reviewable",
+		color: "0E8A16",
+		description: "Automated review passed; ready for maintainer review",
+	},
+	failed: {
+		name: "ai-review-failed",
+		color: "B60205",
+		description: "Automated review could not complete",
+	},
+} as const;
+const labelSetup = new Map<string, Promise<void>>();
+const lifecycleQueues = new Map<string, Promise<void>>();
+
+export type LifecycleStatus =
+	| "draft"
+	| "reviewing"
+	| "changes"
+	| "ready"
+	| "skipped"
+	| "failed";
+const LABEL_FOR_STATUS: Partial<Record<LifecycleStatus, string>> = {
+	reviewing: LABELS.reviewing.name,
+	changes: LABELS.changes.name,
+	ready: LABELS.ready.name,
+	failed: LABELS.failed.name,
+};
+type Coordinates = {
+	owner: string;
+	repo: string;
+	pullNumber: number;
+};
+
+function hasHttpStatus(error: unknown, status: number): boolean {
+	return (
+		error instanceof Error &&
+		"status" in error &&
+		typeof error.status === "number" &&
+		error.status === status
+	);
+}
+
+function targetHeadUpdate(status: LifecycleStatus, headSha?: string) {
+	switch (status) {
+		case "reviewing":
+			return { targetHeadSha: headSha };
+		case "draft":
+			return { targetHeadSha: null };
+		default:
+			return {};
+	}
+}
+
+async function statusText(
+	status: LifecycleStatus,
+	details?: string,
+): Promise<string> {
+	let text: string;
+	switch (status) {
+		case "draft":
+			text =
+				"📝 **Draft received.** The automated review will start when this pull request is marked ready for review.";
+			break;
+		case "reviewing":
+			text =
+				"⏳ **Automated review in progress.** A new decision will be submitted for the latest commit.";
+			break;
+		case "changes":
+			text =
+				"🔴 **Contributor changes requested.** Address the blocking inline findings and push a new commit; the bot will review it automatically.";
+			break;
+		case "ready":
+			text =
+				"✅ **Ready for human review.** The automated reviewer approved the latest commit and a maintainer has been notified.";
+			break;
+		case "skipped":
+			text =
+				"⏭️ **Automated review skipped.** This pull request does not change reviewable extension files.";
+			break;
+		case "failed":
+			text = `⚠️ **Automated review failed.** A maintainer can retry by commenting \`${await githubReviewCommand()}\`.`;
+	}
+	return details ? `${text}\n\n${details}` : text;
+}
+
+async function ensureLabels(
+	octokit: ReturnType<typeof getGitHubClient>,
+	owner: string,
+	repo: string,
+): Promise<void> {
+	const key = `${owner}/${repo}`.toLowerCase();
+	let setup = labelSetup.get(key);
+	if (!setup) {
+		setup = (async () => {
+			for (const label of Object.values(LABELS)) {
+				try {
+					await octokit.rest.issues.getLabel({ owner, repo, name: label.name });
+				} catch (error) {
+					if (!hasHttpStatus(error, 404)) throw error;
+					await octokit.rest.issues.createLabel({ owner, repo, ...label });
+				}
+			}
+		})();
+		labelSetup.set(key, setup);
+	}
+	try {
+		await setup;
+	} catch (error) {
+		labelSetup.delete(key);
+		throw error;
+	}
+}
+
+async function statusComment(
+	status: LifecycleStatus,
+	details?: string,
+): Promise<string> {
+	return `${MARKER}
+Thanks for contributing an extension to Vicinae! 👋
+
+Before publication, this pull request receives two reviews:
+
+1. An automated review for extension guidelines, safety, error handling, and likely correctness issues.
+2. A final review from a Vicinae maintainer.
+
+${await statusText(status, details)}
+
+The automated reviewer examines only the current commit. New commits invalidate its previous decision and start another review.`;
+}
+
+async function setLifecycleStatus(
+	input: Coordinates & {
+		status: LifecycleStatus;
+		headSha?: string;
+		details?: string;
+	},
+): Promise<void> {
+	const octokit = getGitHubClient();
+	await ensureLabels(octokit, input.owner, input.repo);
+	const issue = {
+		owner: input.owner,
+		repo: input.repo,
+		issue_number: input.pullNumber,
+	};
+	const state = await prisma.pullRequestReviewState.upsert({
+		where: {
+			owner_repository_pullNumber: {
+				owner: input.owner,
+				repository: input.repo,
+				pullNumber: input.pullNumber,
+			},
+		},
+		update: targetHeadUpdate(input.status, input.headSha),
+		create: {
+			owner: input.owner,
+			repository: input.repo,
+			pullNumber: input.pullNumber,
+			targetHeadSha: input.status === "reviewing" ? input.headSha : null,
+		},
+	});
+	if (
+		!["reviewing", "draft"].includes(input.status) &&
+		input.headSha &&
+		state.targetHeadSha !== input.headSha
+	)
+		return;
+
+	// Octokit represents GitHub IDs as safe JavaScript numbers, while Prisma Int
+	// is signed 32-bit. Store the ID as BigInt and convert only at the API edge.
+	let commentId = state.statusCommentId
+		? Number(state.statusCommentId)
+		: undefined;
+	if (!commentId) {
+		const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+			...issue,
+			per_page: 100,
+		});
+		commentId = comments.find((comment) => comment.body?.includes(MARKER))?.id;
+	}
+	const body = await statusComment(input.status, input.details);
+	if (commentId) {
+		try {
+			await octokit.rest.issues.updateComment({
+				owner: input.owner,
+				repo: input.repo,
+				comment_id: commentId,
+				body,
+			});
+		} catch (error) {
+			if (!hasHttpStatus(error, 404)) throw error;
+			commentId = (await octokit.rest.issues.createComment({ ...issue, body }))
+				.data.id;
+		}
+	} else
+		commentId = (await octokit.rest.issues.createComment({ ...issue, body }))
+			.data.id;
+
+	const wanted = LABEL_FOR_STATUS[input.status];
+	const { data: currentIssue } = await octokit.rest.issues.get(issue);
+	const currentLabels = new Set(
+		currentIssue.labels
+			.map((label) => (typeof label === "string" ? label : label.name))
+			.filter((name): name is string => Boolean(name)),
+	);
+	await Promise.all(
+		Object.values(LABELS)
+			.map((label) => label.name)
+			.filter((name) => name !== wanted && currentLabels.has(name))
+			.map((name) =>
+				octokit.rest.issues.removeLabel({ ...issue, name }).catch((error) => {
+					if (!hasHttpStatus(error, 404)) throw error;
+				}),
+			),
+	);
+	if (wanted && !currentLabels.has(wanted))
+		await octokit.rest.issues.addLabels({ ...issue, labels: [wanted] });
+	console.log(
+		`[review-lifecycle] ${input.owner}/${input.repo}#${input.pullNumber}: ${input.status} (${wanted ?? "no managed label"})`,
+	);
+
+	let lastNotifiedSha = state.lastNotifiedSha;
+	if (
+		input.status === "ready" &&
+		input.headSha &&
+		state.lastNotifiedSha !== input.headSha
+	) {
+		const maintainer = process.env.GITHUB_REVIEW_MAINTAINER?.replace(/^@/, "");
+		if (maintainer)
+			await octokit.rest.issues.createComment({
+				...issue,
+				body: `@${maintainer} automated review passed for \`${input.headSha.slice(0, 7)}\`; this extension is ready for your review.`,
+			});
+		lastNotifiedSha = input.headSha;
+	}
+	await prisma.pullRequestReviewState.update({
+		where: { id: state.id },
+		data: {
+			statusCommentId: commentId === undefined ? undefined : BigInt(commentId),
+			lastNotifiedSha,
+		},
+	});
+}
+
+export function scheduleLifecycleStatus(
+	input: Coordinates & {
+		status: LifecycleStatus;
+		headSha?: string;
+		details?: string;
+	},
+): Promise<void> {
+	const key = `${input.owner}/${input.repo}#${input.pullNumber}`.toLowerCase();
+	const previous = lifecycleQueues.get(key) ?? Promise.resolve();
+	const current = previous
+		.catch(() => undefined)
+		.then(() => setLifecycleStatus(input));
+	lifecycleQueues.set(key, current);
+	const cleanup = () => {
+		if (lifecycleQueues.get(key) === current) lifecycleQueues.delete(key);
+	};
+	void current.then(cleanup, cleanup);
+	return current;
+}
