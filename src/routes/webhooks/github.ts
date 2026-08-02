@@ -6,7 +6,7 @@ import {
 	isGitHubReviewCommand,
 	verifyGitHubWebhook,
 } from "@/reviews/github.js";
-import { setLifecycleStatus } from "@/reviews/lifecycle.js";
+import { scheduleLifecycleStatus } from "@/reviews/lifecycle.js";
 import { cancelSupersededReview } from "@/reviews/worker.js";
 import { pullRequestDisposition } from "@/reviews/workflow.js";
 import type { AppContext } from "@/types/app.js";
@@ -36,18 +36,23 @@ function repositoryAllowed(repository: Repository): boolean {
 	return repository.full_name.toLowerCase() === allowed.toLowerCase();
 }
 
+function queueLifecycleUpdate(
+	input: Parameters<typeof scheduleLifecycleStatus>[0],
+): void {
+	void scheduleLifecycleStatus(input).catch((error) => {
+		console.error(
+			`Could not update review lifecycle for ${input.owner}/${input.repo}#${input.pullNumber}:`,
+			error,
+		);
+	});
+}
+
 async function queueReview(input: {
 	deliveryId: string;
 	repository: Repository;
 	pullNumber: number;
 	headSha: string;
 }): Promise<boolean> {
-	cancelSupersededReview({
-		owner: input.repository.owner.login,
-		repository: input.repository.name,
-		pullNumber: input.pullNumber,
-		headSha: input.headSha,
-	});
 	const queued = await prisma.$transaction(async (transaction) => {
 		const existingDelivery = await transaction.pullRequestReviewJob.findUnique({
 			where: { deliveryId: input.deliveryId },
@@ -89,13 +94,21 @@ async function queueReview(input: {
 		});
 		return true;
 	});
-	await setLifecycleStatus({
-		owner: input.repository.owner.login,
-		repo: input.repository.name,
-		pullNumber: input.pullNumber,
-		status: "reviewing",
-		headSha: input.headSha,
-	});
+	if (queued) {
+		cancelSupersededReview({
+			owner: input.repository.owner.login,
+			repository: input.repository.name,
+			pullNumber: input.pullNumber,
+			headSha: input.headSha,
+		});
+		queueLifecycleUpdate({
+			owner: input.repository.owner.login,
+			repo: input.repository.name,
+			pullNumber: input.pullNumber,
+			status: "reviewing",
+			headSha: input.headSha,
+		});
+	}
 	return queued;
 }
 
@@ -128,7 +141,7 @@ githubWebhook.post("/", async (c) => {
 			payload.pull_request.draft,
 		);
 		if (disposition === "draft") {
-			await setLifecycleStatus({ ...coordinates, status: "draft" });
+			queueLifecycleUpdate({ ...coordinates, status: "draft" });
 			return c.json({ welcomed: true });
 		}
 		if (disposition === "ignore") return c.json({ ignored: true });
@@ -146,8 +159,8 @@ githubWebhook.post("/", async (c) => {
 		if (
 			payload.action !== "created" ||
 			!payload.issue.pull_request ||
-			!(await isGitHubReviewCommand(payload.comment.body)) ||
-			!repositoryAllowed(payload.repository)
+			!repositoryAllowed(payload.repository) ||
+			!(await isGitHubReviewCommand(payload.comment.body))
 		)
 			return c.json({ ignored: true });
 		const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
@@ -186,7 +199,7 @@ githubWebhook.post("/", async (c) => {
 			pull_number: payload.issue.number,
 		});
 		if (pull.draft) {
-			await setLifecycleStatus({
+			queueLifecycleUpdate({
 				owner: payload.repository.owner.login,
 				repo: payload.repository.name,
 				pullNumber: payload.issue.number,

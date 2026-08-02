@@ -13,12 +13,18 @@ export function getGitHubClient(): Octokit {
 }
 
 export function getGitHubBotLogin(): Promise<string> {
-	botLogin ??= getGitHubClient()
-		.rest.users.getAuthenticated()
-		.then(({ data }) => {
-			console.log(`[github] authenticated as @${data.login}`);
-			return data.login;
-		});
+	if (!botLogin) {
+		botLogin = getGitHubClient()
+			.rest.users.getAuthenticated()
+			.then(({ data }) => {
+				console.log(`[github] authenticated as @${data.login}`);
+				return data.login;
+			})
+			.catch((error) => {
+				botLogin = undefined;
+				throw error;
+			});
+	}
 	return botLogin;
 }
 

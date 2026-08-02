@@ -25,12 +25,14 @@ const LABELS = {
 	},
 } as const;
 const labelSetup = new Map<string, Promise<void>>();
+const lifecycleQueues = new Map<string, Promise<void>>();
 
 export type LifecycleStatus =
 	| "draft"
 	| "reviewing"
 	| "changes"
 	| "ready"
+	| "skipped"
 	| "failed";
 type Coordinates = {
 	owner: string;
@@ -59,6 +61,10 @@ async function statusText(
 		case "ready":
 			text =
 				"✅ **Ready for human review.** The automated reviewer approved the latest commit and a maintainer has been notified.";
+			break;
+		case "skipped":
+			text =
+				"⏭️ **Automated review skipped.** This pull request does not change reviewable extension files.";
 			break;
 		case "failed":
 			text = `⚠️ **Automated review failed.** A maintainer can retry by commenting \`${await githubReviewCommand()}\`.`;
@@ -118,7 +124,7 @@ ${await statusText(status, details)}
 The automated reviewer examines only the current commit. New commits invalidate its previous decision and start another review.`;
 }
 
-export async function setLifecycleStatus(
+async function setLifecycleStatus(
 	input: Coordinates & {
 		status: LifecycleStatus;
 		headSha?: string;
@@ -174,14 +180,23 @@ export async function setLifecycleStatus(
 		commentId = comments.find((comment) => comment.body?.includes(MARKER))?.id;
 	}
 	const body = await statusComment(input.status, input.details);
-	if (commentId)
-		await octokit.rest.issues.updateComment({
-			owner: input.owner,
-			repo: input.repo,
-			comment_id: commentId,
-			body,
-		});
-	else
+	if (commentId) {
+		try {
+			await octokit.rest.issues.updateComment({
+				owner: input.owner,
+				repo: input.repo,
+				comment_id: commentId,
+				body,
+			});
+		} catch (error) {
+			if (
+				!(error instanceof Error && "status" in error && error.status === 404)
+			)
+				throw error;
+			commentId = (await octokit.rest.issues.createComment({ ...issue, body }))
+				.data.id;
+		}
+	} else
 		commentId = (await octokit.rest.issues.createComment({ ...issue, body }))
 			.data.id;
 
@@ -195,17 +210,31 @@ export async function setLifecycleStatus(
 					: input.status === "failed"
 						? LABELS.failed.name
 						: undefined;
-	const managedLabels = new Set<string>(
-		Object.values(LABELS).map((label) => label.name),
-	);
 	const { data: currentIssue } = await octokit.rest.issues.get(issue);
-	const labels = currentIssue.labels
-		.map((label) => (typeof label === "string" ? label : label.name))
-		.filter(
-			(name): name is string => Boolean(name) && !managedLabels.has(name),
-		);
-	if (wanted) labels.push(wanted);
-	await octokit.rest.issues.setLabels({ ...issue, labels });
+	const currentLabels = new Set(
+		currentIssue.labels
+			.map((label) => (typeof label === "string" ? label : label.name))
+			.filter((name): name is string => Boolean(name)),
+	);
+	await Promise.all(
+		Object.values(LABELS)
+			.map((label) => label.name)
+			.filter((name) => name !== wanted && currentLabels.has(name))
+			.map((name) =>
+				octokit.rest.issues.removeLabel({ ...issue, name }).catch((error) => {
+					if (
+						!(
+							error instanceof Error &&
+							"status" in error &&
+							error.status === 404
+						)
+					)
+						throw error;
+				}),
+			),
+	);
+	if (wanted && !currentLabels.has(wanted))
+		await octokit.rest.issues.addLabels({ ...issue, labels: [wanted] });
 	console.log(
 		`[review-lifecycle] ${input.owner}/${input.repo}#${input.pullNumber}: ${input.status} (${wanted ?? "no managed label"})`,
 	);
@@ -231,4 +260,24 @@ export async function setLifecycleStatus(
 			lastNotifiedSha,
 		},
 	});
+}
+
+export function scheduleLifecycleStatus(
+	input: Coordinates & {
+		status: LifecycleStatus;
+		headSha?: string;
+		details?: string;
+	},
+): Promise<void> {
+	const key = `${input.owner}/${input.repo}#${input.pullNumber}`.toLowerCase();
+	const previous = lifecycleQueues.get(key) ?? Promise.resolve();
+	const current = previous
+		.catch(() => undefined)
+		.then(() => setLifecycleStatus(input));
+	lifecycleQueues.set(key, current);
+	const cleanup = () => {
+		if (lifecycleQueues.get(key) === current) lifecycleQueues.delete(key);
+	};
+	void current.then(cleanup, cleanup);
+	return current;
 }

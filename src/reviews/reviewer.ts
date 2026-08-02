@@ -1,4 +1,8 @@
 import { addedLines } from "./diff.js";
+import {
+	NoReviewableExtensionChangesError,
+	SupersededReviewError,
+} from "./errors.js";
 import { getGitHubBotLogin, getGitHubClient } from "./github.js";
 import { type ReviewSourceFile, runCodexReview } from "./runner.js";
 import type { Finding } from "./types.js";
@@ -78,7 +82,7 @@ export async function reviewPullRequest(input: {
 	input.signal?.throwIfAborted();
 	if (pull.draft) throw new Error("Pull request is still a draft");
 	if (pull.head.sha !== input.expectedHeadSha)
-		throw new Error("Review job was superseded by a newer commit");
+		throw new SupersededReviewError();
 
 	const botLogin = (await getGitHubBotLogin()).toLowerCase();
 	const [issueComments, reviews, reviewComments] = await Promise.all([
@@ -147,8 +151,7 @@ export async function reviewPullRequest(input: {
 		(file) =>
 			file.status !== "removed" && file.filename.startsWith("extensions/"),
 	);
-	if (candidates.length === 0)
-		throw new Error("Pull request has no reviewable extension files");
+	if (candidates.length === 0) throw new NoReviewableExtensionChangesError();
 	if (candidates.length > MAX_FILES)
 		throw new Error(`Pull request exceeds the ${MAX_FILES}-file review limit`);
 
@@ -193,7 +196,7 @@ export async function reviewPullRequest(input: {
 		owner: input.owner,
 		repo: input.repo,
 		path: "skills/extension-reviewer/SKILL.md",
-		ref: pull.base.sha,
+		ref: "main",
 	});
 	if (
 		Array.isArray(reviewSkillData) ||
@@ -281,8 +284,7 @@ export async function reviewPullRequest(input: {
 	}
 
 	const { data: current } = await octokit.rest.pulls.get(coordinates);
-	if (current.head.sha !== pull.head.sha)
-		throw new Error("Review job was superseded by a newer commit");
+	if (current.head.sha !== pull.head.sha) throw new SupersededReviewError();
 	const fallback = summaryOnly.length
 		? `\n\n### Findings without an inline diff location\n\n${summaryOnly.map((finding) => `- **${finding.title}** (\`${finding.path}:${finding.line}\`, ${finding.rule}): ${finding.explanation} ${finding.remediation}`).join("\n")}`
 		: "";
@@ -296,8 +298,7 @@ export async function reviewPullRequest(input: {
 	});
 	stageDone(`GitHub review submission (${comments.length} inline comments)`);
 	const { data: afterReview } = await octokit.rest.pulls.get(coordinates);
-	if (afterReview.head.sha !== pull.head.sha)
-		throw new Error("Review job was superseded by a newer commit");
+	if (afterReview.head.sha !== pull.head.sha) throw new SupersededReviewError();
 	stageDone("final head verification");
 	return {
 		headSha: pull.head.sha,

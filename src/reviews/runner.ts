@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { Codex, type ModelReasoningEffort } from "@openai/codex-sdk";
+import { SupersededReviewError } from "./errors.js";
 import {
 	type CodexReview,
 	codexReviewSchema,
@@ -509,9 +510,7 @@ export async function runCodexReview(
 			if (cancellationSignal?.aborted) {
 				if (cancellationSignal.reason instanceof Error)
 					throw cancellationSignal.reason;
-				throw new Error("Review job was superseded by a newer commit", {
-					cause: error,
-				});
+				throw new SupersededReviewError();
 			}
 			throw error;
 		}
