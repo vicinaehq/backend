@@ -43,9 +43,6 @@ jobs:
             # Run migrations
             bun run prisma-deploy
 
-            # Keep the deployed systemd unit in sync with the repository.
-            sudo install -m 0644 extra/vicinae.service /etc/systemd/system/vicinae.service
-            sudo systemctl daemon-reload
             sudo systemctl restart vicinae
 
             # Wait for service to be healthy
