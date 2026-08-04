@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createStorageFromEnv, LocalStorageAdapter } from "@/storage/index.js";
 import type { AppContext } from "@/types/app.js";
 import storeRouter from "./store.js";
+import currencies from "./currencies.js";
 import raycast from "./raycast.js";
 import telemetry from "./telemetry.js";
 import admin from "./admin.js";
@@ -19,6 +20,7 @@ v1.use("*", async (c, next) => {
 });
 
 v1.route("/store", storeRouter);
+v1.route("/currencies", currencies);
 v1.route("/raycast", raycast);
 v1.route("/telemetry", telemetry);
 v1.route("/admin", admin);
