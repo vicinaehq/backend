@@ -42,6 +42,20 @@ export async function isGitHubReviewCommand(
 	);
 }
 
+export async function githubTriageCommand(login?: string): Promise<string> {
+	return `@${login ?? (await getGitHubBotLogin())} triage`;
+}
+
+export async function isGitHubTriageCommand(
+	body: string,
+	login?: string,
+): Promise<boolean> {
+	return (
+		body.trim().toLowerCase() ===
+		(await githubTriageCommand(login)).toLowerCase()
+	);
+}
+
 export function verifyGitHubWebhook(body: string, signature: string): boolean {
 	const secret = process.env.GITHUB_WEBHOOK_SECRET;
 	if (!secret) throw new Error("GITHUB_WEBHOOK_SECRET is required");

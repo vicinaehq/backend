@@ -73,6 +73,24 @@ The reviewer maintains one welcome/status comment and the following labels:
 
 It mentions `GITHUB_REVIEW_MAINTAINER` once per commit when the automated review transitions to approved.
 
+### AI-assisted issue triage
+
+The same GitHub account can label newly opened issues in `vicinaehq/vicinae` and notify `GITHUB_REVIEW_MAINTAINER` when it finds likely duplicates. Triage fetches all open and closed issues for every run, ranks a small candidate set locally, and sends only those candidates to Codex. It does not cache issues, label an issue as a duplicate, or close issues.
+
+An organization owner/member or repository collaborator can rerun triage on an existing issue by commenting `@<reviewer> triage`, using the authenticated bot account's actual login.
+
+Give the account Issues read and write access to the main repository, add the Issues webhook event, and enable triage:
+
+```env
+GITHUB_TRIAGE_REPOSITORY=vicinaehq/vicinae
+CODEX_TRIAGE_REASONING_EFFORT=medium
+CODEX_TRIAGE_TIMEOUT_MS=300000
+```
+
+Triage is enabled when `GITHUB_TRIAGE_REPOSITORY` is configured and disabled when it is absent.
+
+The bot reads the repository's labels on every run, so newly created labels are available without a deployment. The hardcoded protected set prevents it from applying `auto-triaged`, `confirmed`, `duplicate`, `good first issue`, `help wanted`, `not planned`, and `wontfix`. The backend applies `auto-triaged` itself only after successful completion.
+
 ### Codex subscription
 
 Keep a dedicated, persistent Codex home and authenticate it with the Codex for OSS account:

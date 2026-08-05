@@ -4,7 +4,7 @@
 		"dev": "bun run --hot src/index.ts",
 		"start": "NODE_ENV=production bun run src/index.ts",
 		"format": "biome format --write",
-		"check": "biome check src/reviews src/routes/webhooks/github.ts src/middleware/auth.ts src/routes/v1/currencies.ts src/utils/currencies.ts src/utils/currencies.test.ts src/utils/ttl-cache.ts src/utils/ttl-cache.test.ts",
+		"check": "biome check src/reviews src/triage src/routes/webhooks/github.ts src/middleware/auth.ts src/routes/v1/currencies.ts src/utils/currencies.ts src/utils/currencies.test.ts src/utils/ttl-cache.ts src/utils/ttl-cache.test.ts",
 		"test": "bun test",
 		"type-check": "tsc --noEmit",
 		"prisma-deploy": "prisma migrate deploy"

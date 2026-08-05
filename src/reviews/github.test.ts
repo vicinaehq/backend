@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
 	githubReviewCommand,
+	githubTriageCommand,
 	isGitHubReviewCommand,
+	isGitHubTriageCommand,
 	verifyGitHubWebhook,
 } from "./github.js";
 
@@ -33,6 +35,20 @@ describe("GitHub review mention command", () => {
 				"please @vicinae-clanker review",
 				"vicinae-clanker",
 			),
+		).toBe(false);
+	});
+});
+
+describe("GitHub triage mention command", () => {
+	test("accepts only the bot mention followed by triage", async () => {
+		expect(await githubTriageCommand("vicinae-bot")).toBe(
+			"@vicinae-bot triage",
+		);
+		expect(
+			await isGitHubTriageCommand(" @VICINAE-BOT TRIAGE ", "vicinae-bot"),
+		).toBe(true);
+		expect(
+			await isGitHubTriageCommand("@vicinae-bot triage please", "vicinae-bot"),
 		).toBe(false);
 	});
 });

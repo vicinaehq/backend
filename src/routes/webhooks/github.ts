@@ -4,11 +4,13 @@ import {
 	getGitHubClient,
 	githubReviewCommand,
 	isGitHubReviewCommand,
+	isGitHubTriageCommand,
 	verifyGitHubWebhook,
 } from "@/reviews/github.js";
 import { scheduleLifecycleStatus } from "@/reviews/lifecycle.js";
 import { cancelSupersededReview } from "@/reviews/worker.js";
 import { pullRequestDisposition } from "@/reviews/workflow.js";
+import { enqueueIssueTriage } from "@/triage/worker.js";
 import type { AppContext } from "@/types/app.js";
 
 type Repository = { name: string; owner: { login: string }; full_name: string };
@@ -28,6 +30,11 @@ type IssueCommentPayload = {
 		author_association: string;
 		user: { login: string };
 	};
+};
+type IssuesPayload = {
+	action: string;
+	repository: Repository;
+	issue: { number: number; pull_request?: unknown };
 };
 type ReviewCoordinates = {
 	owner: string;
@@ -49,6 +56,12 @@ function reviewCoordinates(
 function repositoryAllowed(repository: Repository): boolean {
 	const allowed =
 		process.env.GITHUB_REVIEW_REPOSITORY ?? "vicinaehq/extensions";
+	return repository.full_name.toLowerCase() === allowed.toLowerCase();
+}
+
+function triageRepositoryAllowed(repository: Repository): boolean {
+	const allowed = process.env.GITHUB_TRIAGE_REPOSITORY;
+	if (!allowed) return false;
 	return repository.full_name.toLowerCase() === allowed.toLowerCase();
 }
 
@@ -135,15 +148,14 @@ githubWebhook.post("/", async (c) => {
 	const signature = c.req.header("X-Hub-Signature-256");
 	if (!signature || !verifyGitHubWebhook(body, signature))
 		return c.json({ error: "Invalid signature" }, 401);
-	if (process.env.CODEX_REVIEW_ENABLED !== "true")
-		return c.json({ ignored: true, reason: "reviewer disabled" });
-
 	const event = c.req.header("X-GitHub-Event");
 	const deliveryId = c.req.header("X-GitHub-Delivery");
 	if (!deliveryId)
 		return c.json({ error: "GitHub delivery ID is missing" }, 400);
 
 	if (event === "pull_request") {
+		if (process.env.CODEX_REVIEW_ENABLED !== "true")
+			return c.json({ ignored: true, reason: "reviewer disabled" });
 		const payload = JSON.parse(body) as PullRequestPayload;
 		if (!repositoryAllowed(payload.repository))
 			return c.json({ ignored: true });
@@ -166,16 +178,73 @@ githubWebhook.post("/", async (c) => {
 		return c.json({ queued }, queued ? 202 : 200);
 	}
 
+	if (event === "issues") {
+		const payload = JSON.parse(body) as IssuesPayload;
+		if (
+			payload.action !== "opened" ||
+			payload.issue.pull_request ||
+			!triageRepositoryAllowed(payload.repository)
+		)
+			return c.json({ ignored: true });
+		const queued = enqueueIssueTriage({
+			owner: payload.repository.owner.login,
+			repo: payload.repository.name,
+			issueNumber: payload.issue.number,
+		});
+		return c.json({ queued }, queued ? 202 : 200);
+	}
+
 	if (event === "issue_comment") {
 		const payload = JSON.parse(body) as IssueCommentPayload;
+		const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+		if (!payload.issue.pull_request) {
+			if (
+				payload.action !== "created" ||
+				!triageRepositoryAllowed(payload.repository) ||
+				!(await isGitHubTriageCommand(payload.comment.body))
+			)
+				return c.json({ ignored: true });
+			const octokit = getGitHubClient();
+			if (!trusted.has(payload.comment.author_association)) {
+				await octokit.rest.issues.createComment({
+					owner: payload.repository.owner.login,
+					repo: payload.repository.name,
+					issue_number: payload.issue.number,
+					body: `@${payload.comment.user.login} only a Vicinae organization member or repository collaborator can request manual triage.`,
+				});
+				return c.json(
+					{ error: "Only trusted contributors can request manual triage" },
+					403,
+				);
+			}
+			try {
+				await octokit.rest.reactions.createForIssueComment({
+					owner: payload.repository.owner.login,
+					repo: payload.repository.name,
+					comment_id: payload.comment.id,
+					content: "eyes",
+				});
+			} catch (error) {
+				console.warn(
+					`Could not react to triage comment ${payload.comment.id}:`,
+					error,
+				);
+			}
+			const queued = enqueueIssueTriage({
+				owner: payload.repository.owner.login,
+				repo: payload.repository.name,
+				issueNumber: payload.issue.number,
+			});
+			return c.json({ queued }, queued ? 202 : 200);
+		}
+		if (process.env.CODEX_REVIEW_ENABLED !== "true")
+			return c.json({ ignored: true, reason: "reviewer disabled" });
 		if (
 			payload.action !== "created" ||
-			!payload.issue.pull_request ||
 			!repositoryAllowed(payload.repository) ||
 			!(await isGitHubReviewCommand(payload.comment.body))
 		)
 			return c.json({ ignored: true });
-		const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 		const octokit = getGitHubClient();
 		if (!trusted.has(payload.comment.author_association)) {
 			await octokit.rest.issues.createComment({
